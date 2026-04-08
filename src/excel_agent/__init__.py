@@ -29,7 +29,9 @@ def __getattr__(name: str) -> object:
 
         return DependencyTracker
     if name == "ApprovalTokenManager":
-        from excel_agent.governance.token_manager import ApprovalTokenManager  # type: ignore[import-untyped]
+        from excel_agent.governance.token_manager import (
+            ApprovalTokenManager,  # type: ignore[import-untyped]
+        )
 
         return ApprovalTokenManager
     if name == "AuditTrail":

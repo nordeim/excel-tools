@@ -226,7 +226,7 @@ def _win32_lock(lock_file: IO[str]) -> None:
 
     lock_file.seek(0)
     try:
-        msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+        msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)  # type: ignore[attr-defined]
     except OSError as exc:
         if exc.errno == errno.EACCES:
             raise
@@ -238,4 +238,4 @@ def _win32_unlock(lock_file: IO[str]) -> None:
     import msvcrt
 
     lock_file.seek(0)
-    msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+    msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined]

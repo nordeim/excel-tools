@@ -210,8 +210,8 @@ class RangeSerializer:
         if self._wb is None:
             return None
 
-        for defn in self._wb.defined_names.definedName:
-            if defn.name.lower() == name.lower():
+        for defn_name, defn in self._wb.defined_names.items():
+            if defn_name.lower() == name.lower():
                 destinations = list(defn.destinations)
                 if not destinations:
                     return None

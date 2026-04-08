@@ -46,8 +46,8 @@ def compute_workbook_hash(workbook: Workbook) -> str:
 
     for sheet_name in workbook.sheetnames:
         ws = workbook[sheet_name]
-        h.update(f"SHEET:{sheet_name}".encode("utf-8"))
-        h.update(f"STATE:{ws.sheet_state}".encode("utf-8"))
+        h.update(f"SHEET:{sheet_name}".encode())
+        h.update(f"STATE:{ws.sheet_state}".encode())
         _hash_sheet_geometry(ws, h)
 
     return f"sha256:{h.hexdigest()}"
@@ -60,8 +60,8 @@ def compute_sheet_hash(sheet: Worksheet) -> str:
         String in format "sha256:<hex_digest>"
     """
     h = hashlib.sha256()
-    h.update(f"SHEET:{sheet.title}".encode("utf-8"))
-    h.update(f"STATE:{sheet.sheet_state}".encode("utf-8"))
+    h.update(f"SHEET:{sheet.title}".encode())
+    h.update(f"STATE:{sheet.sheet_state}".encode())
     _hash_sheet_geometry(sheet, h)
     return f"sha256:{h.hexdigest()}"
 
@@ -109,7 +109,5 @@ def _hash_sheet_geometry(sheet: Worksheet, h: hashlib._Hash) -> None:
 
     if sheet.min_row is not None:
         h.update(
-            f"DIM:{sheet.min_row}:{sheet.min_column}:{sheet.max_row}:{sheet.max_column}".encode(
-                "utf-8"
-            )
+            f"DIM:{sheet.min_row}:{sheet.min_column}:{sheet.max_row}:{sheet.max_column}".encode()
         )

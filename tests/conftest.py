@@ -9,12 +9,9 @@ from __future__ import annotations
 
 import datetime
 from pathlib import Path
-from typing import Generator
 
 import pytest
 from openpyxl import Workbook
-from openpyxl.utils import get_column_letter
-
 
 # ---------------------------------------------------------------------------
 # Workbook Fixtures
@@ -157,7 +154,7 @@ def large_workbook(tmp_path: Path) -> Path:
     ws.append(["ID", "Name", "Value", "Date", "Active"])
 
     # Data rows
-    base_date = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
+    base_date = datetime.datetime(2026, 1, 1, tzinfo=datetime.UTC)
     for i in range(1, 100_001):
         ws.append(
             [

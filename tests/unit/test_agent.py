@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
 
 import pytest
@@ -59,9 +58,8 @@ class TestExcelAgentBasic:
     def test_file_not_found_raises_error(self, tmp_path: Path) -> None:
         """Non-existent file should raise ExcelFileNotFoundError."""
         nonexistent = tmp_path / "does_not_exist.xlsx"
-        with pytest.raises(ExcelFileNotFoundError):
-            with ExcelAgent(nonexistent, mode="rw"):
-                pass
+        with pytest.raises(ExcelFileNotFoundError), ExcelAgent(nonexistent, mode="rw"):
+            pass
 
     def test_invalid_mode_raises_validation_error(self, tmp_path: Path) -> None:
         """Invalid mode should raise ValidationError."""
@@ -141,9 +139,12 @@ class TestExcelAgentConcurrentModification:
         wb = Workbook()
         wb.save(str(wb_path))
 
-        with ExcelAgent(wb_path, mode="rw") as agent:
+        # Enter context manually to control the flow
+        agent = ExcelAgent(wb_path, mode="rw")
+        agent.__enter__()
+
+        try:
             # Simulate external modification
-            wb2 = Workbook()
             from openpyxl import load_workbook
 
             wb2 = load_workbook(str(wb_path))
@@ -153,6 +154,13 @@ class TestExcelAgentConcurrentModification:
             # Should raise when we try to verify
             with pytest.raises(ConcurrentModificationError):
                 agent.verify_no_concurrent_modification()
+        finally:
+            # Clean up: suppress the concurrent modification error during exit
+            # since we've already verified it works
+            try:
+                agent.__exit__(None, None, None)
+            except ConcurrentModificationError:
+                pass  # Expected - we've already tested the verification
 
 
 class TestExcelAgentException:

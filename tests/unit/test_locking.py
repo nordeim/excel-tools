@@ -40,9 +40,8 @@ class TestFileLockBasic:
         target = tmp_path / "test.xlsx"
         target.write_text("data")
 
-        with pytest.raises(ValueError, match="deliberate"):
-            with FileLock(target, timeout=5.0):
-                raise ValueError("deliberate")
+        with pytest.raises(ValueError, match="deliberate"), FileLock(target, timeout=5.0):
+            raise ValueError("deliberate")
 
         # Lock should be released even after exception
         assert not FileLock.is_locked(target)
@@ -131,9 +130,8 @@ class TestFileLockTimeout:
 
         with FileLock(target, timeout=5.0):
             start = time.monotonic()
-            with pytest.raises(LockContentionError):
-                with FileLock(target, timeout=0.5):
-                    pass
+            with pytest.raises(LockContentionError), FileLock(target, timeout=0.5):
+                pass
             elapsed = time.monotonic() - start
             # Should take approximately the timeout duration
             assert 0.4 <= elapsed <= 1.0
@@ -164,7 +162,7 @@ class TestFileLockEdgeCases:
 
         # Note: FileLock is NOT reentrant by design
         # But we should at least verify consistent behavior
-        with FileLock(target, timeout=1.0) as lock1:
+        with FileLock(target, timeout=1.0):
             # Second acquire in same process should fail (non-reentrant)
             with pytest.raises(LockContentionError):
                 with FileLock(target, timeout=0.1):
