@@ -1,0 +1,195 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "excel-agent-tools"
+version = "1.0.0"
+description = "53 governance-first CLI tools for AI agents to safely read, write, and manipulate Excel workbooks"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.12"
+authors = [
+    {name = "excel-agent-tools contributors"},
+]
+keywords = [
+    "excel", "ai-agent", "openpyxl", "cli", "governance",
+    "formulas", "macros", "headless", "json", "automation",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial :: Spreadsheet",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+dependencies = [
+    "openpyxl>=3.1.5",
+    "defusedxml>=0.7.1",
+    "oletools>=0.60",
+    "formulas[excel]>=1.3.0",
+    "pandas>=2.1.0",
+    "jsonschema>=4.23.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "hypothesis>=6.100.0",
+    "black>=24.0.0",
+    "mypy>=1.10.0",
+    "ruff>=0.5.0",
+    "pre-commit>=3.7.0",
+    "types-defusedxml>=0.7.0",
+    "types-jsonschema>=4.23.0",
+    "types-openpyxl>=3.1.0",
+]
+libreoffice = [
+    # Marker group: no pip-installable dep, but documents the Tier 2 requirement.
+    # Install LibreOffice headless via system package manager.
+]
+
+[project.urls]
+Homepage = "https://github.com/user/excel-agent-tools"
+Documentation = "https://github.com/user/excel-agent-tools/tree/main/docs"
+Repository = "https://github.com/user/excel-agent-tools"
+Issues = "https://github.com/user/excel-agent-tools/issues"
+Changelog = "https://github.com/user/excel-agent-tools/blob/main/CHANGELOG.md"
+
+# ---------------------------------------------------------------------------
+# CLI Entry Points — All 53 Tools
+# ---------------------------------------------------------------------------
+[project.scripts]
+# Governance (6)
+xls-clone-workbook = "excel_agent.tools.governance.xls_clone_workbook:main"
+xls-validate-workbook = "excel_agent.tools.governance.xls_validate_workbook:main"
+xls-approve-token = "excel_agent.tools.governance.xls_approve_token:main"
+xls-version-hash = "excel_agent.tools.governance.xls_version_hash:main"
+xls-lock-status = "excel_agent.tools.governance.xls_lock_status:main"
+xls-dependency-report = "excel_agent.tools.governance.xls_dependency_report:main"
+# Read (7)
+xls-read-range = "excel_agent.tools.read.xls_read_range:main"
+xls-get-sheet-names = "excel_agent.tools.read.xls_get_sheet_names:main"
+xls-get-defined-names = "excel_agent.tools.read.xls_get_defined_names:main"
+xls-get-table-info = "excel_agent.tools.read.xls_get_table_info:main"
+xls-get-cell-style = "excel_agent.tools.read.xls_get_cell_style:main"
+xls-get-formula = "excel_agent.tools.read.xls_get_formula:main"
+xls-get-workbook-metadata = "excel_agent.tools.read.xls_get_workbook_metadata:main"
+# Write (4)
+xls-create-new = "excel_agent.tools.write.xls_create_new:main"
+xls-create-from-template = "excel_agent.tools.write.xls_create_from_template:main"
+xls-write-range = "excel_agent.tools.write.xls_write_range:main"
+xls-write-cell = "excel_agent.tools.write.xls_write_cell:main"
+# Structure (8)
+xls-add-sheet = "excel_agent.tools.structure.xls_add_sheet:main"
+xls-delete-sheet = "excel_agent.tools.structure.xls_delete_sheet:main"
+xls-rename-sheet = "excel_agent.tools.structure.xls_rename_sheet:main"
+xls-insert-rows = "excel_agent.tools.structure.xls_insert_rows:main"
+xls-delete-rows = "excel_agent.tools.structure.xls_delete_rows:main"
+xls-insert-columns = "excel_agent.tools.structure.xls_insert_columns:main"
+xls-delete-columns = "excel_agent.tools.structure.xls_delete_columns:main"
+xls-move-sheet = "excel_agent.tools.structure.xls_move_sheet:main"
+# Cells (4)
+xls-merge-cells = "excel_agent.tools.cells.xls_merge_cells:main"
+xls-unmerge-cells = "excel_agent.tools.cells.xls_unmerge_cells:main"
+xls-delete-range = "excel_agent.tools.cells.xls_delete_range:main"
+xls-update-references = "excel_agent.tools.cells.xls_update_references:main"
+# Formulas (6)
+xls-set-formula = "excel_agent.tools.formulas.xls_set_formula:main"
+xls-recalculate = "excel_agent.tools.formulas.xls_recalculate:main"
+xls-detect-errors = "excel_agent.tools.formulas.xls_detect_errors:main"
+xls-convert-to-values = "excel_agent.tools.formulas.xls_convert_to_values:main"
+xls-copy-formula-down = "excel_agent.tools.formulas.xls_copy_formula_down:main"
+xls-define-name = "excel_agent.tools.formulas.xls_define_name:main"
+# Objects (5)
+xls-add-table = "excel_agent.tools.objects.xls_add_table:main"
+xls-add-chart = "excel_agent.tools.objects.xls_add_chart:main"
+xls-add-image = "excel_agent.tools.objects.xls_add_image:main"
+xls-add-comment = "excel_agent.tools.objects.xls_add_comment:main"
+xls-set-data-validation = "excel_agent.tools.objects.xls_set_data_validation:main"
+# Formatting (5)
+xls-format-range = "excel_agent.tools.formatting.xls_format_range:main"
+xls-set-column-width = "excel_agent.tools.formatting.xls_set_column_width:main"
+xls-freeze-panes = "excel_agent.tools.formatting.xls_freeze_panes:main"
+xls-apply-conditional-formatting = "excel_agent.tools.formatting.xls_apply_conditional_formatting:main"
+xls-set-number-format = "excel_agent.tools.formatting.xls_set_number_format:main"
+# Macros (5)
+xls-has-macros = "excel_agent.tools.macros.xls_has_macros:main"
+xls-inspect-macros = "excel_agent.tools.macros.xls_inspect_macros:main"
+xls-validate-macro-safety = "excel_agent.tools.macros.xls_validate_macro_safety:main"
+xls-remove-macros = "excel_agent.tools.macros.xls_remove_macros:main"
+xls-inject-vba-project = "excel_agent.tools.macros.xls_inject_vba_project:main"
+# Export (3)
+xls-export-pdf = "excel_agent.tools.export.xls_export_pdf:main"
+xls-export-csv = "excel_agent.tools.export.xls_export_csv:main"
+xls-export-json = "excel_agent.tools.export.xls_export_json:main"
+
+# ---------------------------------------------------------------------------
+# Tool Configuration
+# ---------------------------------------------------------------------------
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 99
+target-version = ["py312"]
+
+[tool.mypy]
+strict = true
+warn_return_any = true
+disallow_any_generics = true
+no_implicit_reexport = true
+warn_unused_ignores = true
+show_error_codes = true
+python_version = "3.12"
+
+[[tool.mypy.overrides]]
+module = [
+    "oletools.*",
+    "formulas.*",
+    "openpyxl.*",
+]
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 99
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "W",   # pycodestyle warnings
+    "UP",  # pyupgrade
+    "S",   # bandit (security)
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "RUF", # ruff-specific
+]
+ignore = [
+    "S101",  # allow assert in tests
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "S105", "S106"]  # asserts and hardcoded passwords OK in tests
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "libreoffice: marks tests requiring LibreOffice headless",
+    "integration: marks integration tests (subprocess-based)",
+    "property: marks property-based tests (Hypothesis)",
+]
+addopts = "-ra --strict-markers"
+filterwarnings = [
+    "ignore::DeprecationWarning:oletools.*",
+]
