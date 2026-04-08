@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "excel-agent-tools/schemas/style_spec",
+  "title": "Style Specification Schema",
+  "description": "Validates style/formatting specification JSON",
+  "type": "object",
+  "properties": {
+    "font": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "size": { "type": "number", "minimum": 1 },
+        "bold": { "type": "boolean" },
+        "italic": { "type": "boolean" },
+        "color": {
+          "type": "string",
+          "pattern": "^[0-9A-Fa-f]{6}$",
+          "description": "Hex color without # prefix"
+        }
+      }
+    },
+    "fill": {
+      "type": "object",
+      "properties": {
+        "fgColor": { "type": "string", "pattern": "^[0-9A-Fa-f]{6}$" },
+        "bgColor": { "type": "string", "pattern": "^[0-9A-Fa-f]{6}$" },
+        "patternType": {
+          "type": "string",
+          "enum": ["solid", "darkGray", "mediumGray", "lightGray", "gray125", "gray0625"]
+        }
+      }
+    },
+    "border": {
+      "type": "object",
+      "properties": {
+        "top": { "$ref": "#/definitions/borderSide" },
+        "bottom": { "$ref": "#/definitions/borderSide" },
+        "left": { "$ref": "#/definitions/borderSide" },
+        "right": { "$ref": "#/definitions/borderSide" }
+      }
+    },
+    "alignment": {
+      "type": "object",
+      "properties": {
+        "horizontal": {
+          "type": "string",
+          "enum": ["left", "center", "right", "justify", "distributed"]
+        },
+        "vertical": {
+          "type": "string",
+          "enum": ["top", "center", "bottom", "justify", "distributed"]
+        },
+        "wrapText": { "type": "boolean" },
+        "textRotation": { "type": "integer", "minimum": 0, "maximum": 180 }
+      }
+    },
+    "numberFormat": {
+      "type": "string",
+      "description": "Excel number format pattern (e.g., '$#,##0.00', '0.00%')"
+    }
+  },
+  "definitions": {
+    "borderSide": {
+      "type": "object",
+      "properties": {
+        "style": {
+          "type": "string",
+          "enum": ["thin", "medium", "thick", "double", "hair", "dashDot", "dashed", "dotted"]
+        },
+        "color": { "type": "string", "pattern": "^[0-9A-Fa-f]{6}$" }
+      }
+    }
+  }
+}

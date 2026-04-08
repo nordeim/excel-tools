@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "excel-agent-tools/schemas/range_input",
+  "title": "Range Input Schema",
+  "description": "Validates range input arguments across all tools",
+  "oneOf": [
+    {
+      "type": "string",
+      "description": "A1 notation or named range",
+      "pattern": "^[A-Za-z]+[0-9]+(:[A-Za-z]+[0-9]+)?$"
+    },
+    {
+      "type": "string",
+      "description": "Cross-sheet reference",
+      "pattern": "^(?:'[^']+'|[A-Za-z0-9_.\\-]+)![A-Za-z]+[0-9]+(:[A-Za-z]+[0-9]+)?$"
+    },
+    {
+      "type": "object",
+      "description": "Coordinate object",
+      "properties": {
+        "start_row": { "type": "integer", "minimum": 1 },
+        "start_col": { "type": "integer", "minimum": 1 },
+        "end_row": { "type": "integer", "minimum": 1 },
+        "end_col": { "type": "integer", "minimum": 1 },
+        "sheet": { "type": "string" }
+      },
+      "required": ["start_row", "start_col"]
+    }
+  ]
+}
