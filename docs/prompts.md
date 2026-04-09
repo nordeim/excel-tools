@@ -10,6 +10,10 @@ awesome job so far! Please think deeper and think harder to meticulously explore
 
 ---
 
+Awesome job on your meticulous analysis, planning and execution. Please keep up the good work in your rigorous and meticulous approach to planning and execution. Now, please meticulously plan and create the detailed comprehensive `Project Architecture Document` with file hierarchy diagram with listing of key files and their description, mermaid diagrams to show the application flowcharts and the database schema. Review and validate the PAD against the project planning documents and the actual codebase. Finally, create a detailed and comprehensive `Project_Architecture_Document.md` in the project root folder, as the single source-of-truth handbook to fully initialize new developer or another coding agent to be able to handle new PRs independently.
+
+---
+
 Awesome meticulous job so far. Please keep up the good work. Yes, please save/stage your sub-plan/todo-list before meticulously proceed to execute according to the sub-plan.
 Awesome meticulous job so far. Please think deeper and think harder to re-imagine the landing page design to be aesthetically more amazing, gorgeous, and pleasing, make it a world-class design that is breathtaking.
 
