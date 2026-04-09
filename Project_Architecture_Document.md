@@ -85,9 +85,10 @@ excel-agent-tools/
 │   │   ├── 📜 serializers.py   # RangeSerializer: A1, R1C1, Named, Table → Coordinates
 │   │   ├── 📜 dependency.py    # DependencyTracker: Tokenizer, BFS, Tarjan's SCC
 │   │   ├── 📜 version_hash.py  # Geometry & File hashing (SHA-256, excludes values)
-│   │   ├── 📜 formula_updater.py # Reference shifting for structural mutations
-│   │   ├── 📜 chunked_io.py    # Streaming read/write for >100k rows
-│   │   └── 📜 type_coercion.py # JSON → Python type inference for cell writes
+│ │ ├── 📜 formula_updater.py # Reference shifting for structural mutations
+│ │ ├── 📜 chunked_io.py # Streaming read/write for >100k rows
+│ │ ├── 📜 type_coercion.py # JSON → Python type inference for cell writes
+│ │ └── 📜 style_serializer.py # Style serialization for cell formatting
 │   ├── 📂 governance/          # Security & Compliance
 │   │   ├── 📜 token_manager.py # ApprovalTokenManager: HMAC, TTL, nonce, compare_digest
 │   │   ├── 📜 audit_trail.py   # AuditTrail: Jsonl/Null/Composite backends
@@ -342,7 +343,7 @@ class MacroAnalyzer(Protocol):
 python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt && pip install -e .
 pre-commit install
-python scripts/generate_test_files.py
+# Test fixtures are generated programmatically via conftest.py fixtures
 ```
 
 ### 9.2 Adding a New Tool
@@ -356,8 +357,8 @@ python scripts/generate_test_files.py
 ### 9.3 CI/CD Gates (Non-Negotiable)
 | Gate | Command | Threshold |
 |:---|:---|:---|
-| Formatting | `black --check src/ tools/ tests/` | 0 violations |
-| Linting | `ruff check src/ tools/` | 0 errors |
+| Formatting | `black --check src/ tests/` | 0 violations |
+| Linting | `ruff check src/` | 0 errors |
 | Type Checking | `mypy --strict src/` | 0 errors |
 | Testing | `pytest --cov=excel_agent --cov-fail-under=90` | ≥90% coverage |
 | Integration | `pytest -m integration` | 100% pass |

@@ -2,8 +2,8 @@
 
 > **53 governance-first, AI-native CLI tools for safe, headless Excel manipulation.**
 
-[![CI](https://github.com/user/excel-agent-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/user/excel-agent-tools/actions/workflows/ci.yml)
-[![Coverage](https://codecov.io/gh/user/excel-agent-tools/branch/main/graph/badge.svg)](https://codecov.io/gh/user/excel-agent-tools)
+[![CI](https://github.com/<ORGANIZATION>/<REPOSITORY>/actions/workflows/ci.yml/badge.svg)](https://github.com/<ORGANIZATION>/<REPOSITORY>/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/<ORGANIZATION>/<REPOSITORY>/branch/main/graph/badge.svg)](https://codecov.io/gh/<ORGANIZATION>/<REPOSITORY>)
 [![PyPI](https://img.shields.io/pypi/v/excel-agent-tools.svg)](https://pypi.org/project/excel-agent-tools/)
 [![Python](https://img.shields.io/pypi/pyversions/excel-agent-tools.svg)](https://pypi.org/project/excel-agent-tools/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
