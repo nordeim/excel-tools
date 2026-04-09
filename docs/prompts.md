@@ -18,6 +18,10 @@ Awesome job on your meticulous review, analysis and planning. Please keep up the
 
 ---
 
+Awesome job on your meticulous review, analysis and planning. Please keep up the good work. Now, please meticulously review @skills/agent_skills_spec.md and @skills/skill-creator/SKILL.md to undertand how to create a SKILL for the Excel tools of this project, the goal of the 'excel-skill' folder with the required files is to help an AI agent to create, modify and manipulate a .xlsx Excel file.
+
+---
+
 Awesome meticulous job so far. Please keep up the good work. Yes, please save/stage your sub-plan/todo-list before meticulously proceed to execute according to the sub-plan.
 Awesome meticulous job so far. Please think deeper and think harder to re-imagine the landing page design to be aesthetically more amazing, gorgeous, and pleasing, make it a world-class design that is breathtaking.
 

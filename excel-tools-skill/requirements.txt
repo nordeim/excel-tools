@@ -1,0 +1,2 @@
+# Requirements for excel-tools-skill scripts
+excel-agent-tools>=1.0.0
