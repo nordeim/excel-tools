@@ -173,3 +173,215 @@ The main places where the repo’s phrasing is stronger than what I can strictly
 
 If you want to treat this as infrastructure for AI-friendly Office replacements, the repo’s design decisions (JSON-only stdout, denial-with-guidance, scoped approvals, pre-flight dependency graphs) are exactly aligned with “CLI access is water to fish” for agents. 
 
+---
+
+Your test outcomes are the kind of evidence that makes a “fit-for-use” decision actually credible: you didn’t just run happy-path unit tests—you built office-realistic fixtures, executed end-to-end CLI flows, and (crucially) validated the *tool contract surface* (argparse, `--help`, signatures), which is exactly where agent toolchains tend to break.
+
+Below is (1) a meticulous review of your results (with a few corrections/extra gaps I can verify directly from the repo), and then (2) a meticulous plan for producing a **finalized, comprehensive assessment report** that is decision-ready for stakeholders.
+
+---
+
+## 1) Meticulous review of your realistic test outcomes
+
+### A. Your headline metrics are meaningful, but the *weighting* matters
+- **76 tests / 64 passed (84%)**: good breadth, but the 8 failures aren’t “just 11%”—several are **contract-level** failures (CLI parser crashes) that can block adoption even if the underlying workbook logic is strong.
+- Your key value-add is that you tested **agent-realistic ergonomics**: `--help`, JSON stdout consistency, and “governance gating.” That aligns with how the project markets itself (“AI-native contracts” + “governance-first”). 
+
+### B. Two “--help crash” findings are strongly confirmed by code
+#### Gap #1 — `xls_set_number_format --help` argparse crash (HIGH)
+In `xls_set_number_format.py`, the `--number-format` help string includes an example with `0.00%`. Argparse expands help strings via old-style `%` formatting, so a literal `%` can indeed crash `--help` unless escaped (`%%`). 
+
+Also, there is a **second, separate contract mismatch** here (more below): docs show `--format`, code expects `--number-format`. 
+
+#### Gap #2 — `xls_inject_vba_project` duplicate `--force` argument (HIGH)
+This one is “hard fail” quality: the tool calls `add_governance_args(parser)` which already defines `--force`, and then defines `--force` again inside `xls_inject_vba_project.py`, which causes argparse to raise a duplicate option error. 
+
+Your classification as HIGH severity is right: it prevents the tool from starting at all (not just the help text).
+
+### C. A few of your “gaps” are actually *feature gaps* (valid), not doc mismatches
+#### Gap #4 — `xls_export_csv` has no `--range` (MED)
+Confirmed: the CLI arguments are `--encoding`, `--delimiter`, `--include-headers`, `--outfile`, plus common args (like `--sheet`). There is no `--range`, and the implementation iterates `ws.iter_rows(values_only=True)` across the whole sheet. 
+
+This is a real-world limitation: in office workflows you often need to export *just a table/range* (e.g., used range, a named table, or `A1:J201`) rather than entire sheets.
+
+Also: `--include-headers` is implemented as `action="store_true"` with `default=True`, which means you can’t turn headers off via CLI (there is no `--no-include-headers`). That’s a smaller but concrete usability gap. 
+
+#### Gap #5 — `xls_detect_errors` lacks `--range` (LOW per your report, but there’s a deeper issue)
+Confirmed: it takes only common args and scans the workbook. There’s no range filter. 
+
+But more importantly: the current implementation checks *formula cells* (`cell.data_type == "f"`) and then looks at `cell.value` for an error string like `#REF!`. In `openpyxl`, `cell.value` for a formula cell is typically the **formula text** (e.g., `=SUM(A1:A3)`), not the calculated error result—unless you’re reading cached results in `data_only` mode (and even then, the error handling is different). So the current error detection logic is likely to miss many real errors, which could undermine a key “safety” promise. 
+
+**Recommendation:** In the final assessment report, treat “detect errors” as **not fully validated** until it’s proven against:
+- cached error results (`data_only=True`) *and/or*
+- explicit broken-reference formulas that persist as `#REF!` in the stored formula text.
+
+### D. One of your reported doc mismatches looks outdated; another mismatch is real and critical
+#### Gap #3 — `xls_copy_formula_down` signature mismatch (your finding vs repo state)
+In current code, `xls_copy_formula_down` uses `--cell` and `--count`.   
+In current `docs/API.md`, it also documents `--cell` and `--count`. 
+
+So, **as of the current repo**, the *tool and the API reference are aligned* on this tool.
+
+That said, your test suite might have been validating against a different document (e.g., a skill spec or earlier README draft). In the final report, we should reconcile “what source-of-truth was used for expectations.”
+
+#### A more serious mismatch you didn’t explicitly list: `xls-set-number-format` docs vs tool arg name
+In `docs/API.md`, the CLI example uses `--format '$#,##0.00'`.   
+In the actual tool implementation, the required arg is `--number-format` (dest `number_format`). 
+
+This is a **true tool contract mismatch** that will cause real agent failures (“works in docs, fails in production”).
+
+### E. `xls_get_defined_names` crash (MED) is plausible and the code is brittle
+The tool iterates `for defn in wb.defined_names.definedName:` and does not use the same common CLI conventions as other tools (it bypasses `add_common_args` and defines its own `--input`). 
+
+Even without reproducing your exact stack trace, this is consistent with real `openpyxl` API/version differences around defined names. In the final report, we’ll want to:
+- capture the exact exception
+- pin the `openpyxl` version used in your run
+- propose a compatibility-safe implementation approach (use the public `wb.defined_names` dict-like interface if available, or guard `definedName` access)
+
+### F. Your “macro limitations” note is fair—and it should be reframed as a coverage statement
+The repo claims strong macro governance and safety scanning.   
+Your suite couldn’t fully validate injection/removal flows because it lacked a “real” `.xlsm` with embedded VBA (or because fixture generation didn’t include that artifact).
+
+In the final assessment report, this shouldn’t read like a “low severity gap” in the tool—it should read as:
+- **Coverage limitation:** macro tooling partially validated (static `.bin` scan + gating behavior), but full `.xlsm` lifecycle needs dedicated fixture(s).
+
+---
+
+## 2) Meticulous plan to produce a **finalized comprehensive assessment report** (decision-ready)
+
+The repo already contains multiple assessment/report artifacts (several “Comprehensive_*” docs, plus an existing assessment report). A finalized report needs to **consolidate** and become the single source of truth. 
+
+### Deliverables (final)
+1) **`FINAL_COMPREHENSIVE_ASSESSMENT_REPORT.md`** (authoritative)
+2) **PDF export** of the same report (for stakeholders)
+3) **Evidence bundle** (folder or release artifact):
+   - test run logs (raw JSON stdout, junit if available)
+   - environment manifest (`python --version`, OS, `pip freeze`)
+   - fixture checksums + generator script
+   - exact repo commit SHA tested
+4) **Gap tracker**: `gaps.csv` or `gaps.json` with fields:
+   - id, title, severity, reproducibility, affected tools, evidence links, recommended fix, retest steps
+
+### Report structure (recommended outline)
+
+#### 0. Executive Summary (1 page)
+- One-paragraph “Should we adopt this for production agent workflows today?”
+- Overall **Fit-for-Use rating** (e.g., “Conditional: yes after P0 fixes”)
+- Top 3 strengths
+- Top 3 blockers
+
+Ground this against the project’s own claims (governance-first, AI-native CLI, standardized exit codes, etc.). 
+
+#### 1. Scope & Claims Under Review
+Create a **Claims → Evidence → Verdict** table. Example rows:
+- “53 tools” (packaging/entrypoints)
+- “strict JSON envelopes + exit codes”
+- “governance tokens (HMAC, TTL, nonce)”
+- “formula integrity protection”
+- “export CSV/JSON/PDF”
+- “macro safety + injection gating”
+This makes the report legible to non-engineers.
+
+#### 2. Test Methodology (reproducibility-first)
+Include:
+- Date executed (absolute date)
+- Repo branch + commit SHA
+- Python version + OS
+- LibreOffice present or not (affects Tier 2 recalc + PDF export) 
+- How fixtures were generated (seed, row counts)
+- How CLI outputs were asserted (JSON parsing, exit codes)
+
+#### 3. Fixture Pack Description (why it’s “realistic”)
+For each fixture (the 5 you created), document:
+- sheets, named ranges, tables, validations, formulas, external links, circular refs
+- what tools it targets
+- known “tripwires” (structured refs, tricky strings, macro risk patterns)
+
+This section matters because stakeholders will ask: “Does this resemble our spreadsheets?”
+
+#### 4. Coverage Map (tools × scenarios)
+A matrix:
+- rows: 53 tools
+- cols: scenarios (read/write/structure/governance/export/macros/concurrency)
+- cells: PASS/FAIL/SKIP/NOT TESTED
+
+This prevents the common failure mode of “84% pass” masking that key tools are untested.
+
+#### 5. Results Summary
+- High-level metrics (pass/fail/skip)
+- Breakdown by suite A–F
+- Breakdown by category (governance/read/write/structure/formulas/objects/formatting/macros/export)
+
+Also reconcile the repo’s “QA Passed (98.4%)” claim/badge with your independent results, explaining:
+- different test suites
+- different environments
+- missing negative tests (like `--help` parsing) 
+
+#### 6. Findings (deep dive)
+For each “critical gap,” use a standard incident template:
+
+- **Title / Severity**
+- **Affected tool(s)**
+- **Observed behavior**
+- **Expected behavior**
+- **Reproduction steps**
+- **Root cause (code-level, if known)**
+- **Risk to agent workflows**
+- **Recommended fix**
+- **Retest steps + acceptance criteria**
+
+Example: for the duplicate `--force`, cite both the shared governance arg definition and the tool’s local definition. 
+
+Also include the “newly confirmed” mismatch: `xls-set-number-format` docs vs implementation. 
+
+#### 7. Fit-for-Use Decision Framework (what “good enough” means)
+Define production thresholds, e.g.:
+- P0: 53/53 tools must not crash on `--help`
+- Contract stability: CLI signatures match `docs/API.md`
+- Safety: destructive tools require token; impact denial produces guidance
+- Export correctness: exported CSV/JSON reflect recalculated values when recalc was run
+- Macros: injection/removal gated + scanning validated on real `.xlsm`
+
+This turns “findings” into a go/no-go rubric.
+
+#### 8. Remediation Roadmap (prioritized)
+- **P0 (Blockers)**: argparse crashes, duplicate args, doc/CLI mismatches
+- **P1 (Reliability/Correctness)**: `xls_get_defined_names` robustness; error detection correctness; range support in CSV export if required for your use case
+- **P2 (Ergonomics/Docs)**: unify “common args”; add `--no-*` flags where appropriate; standardize tool help formatting; add golden fixtures for macros
+
+#### 9. Retest Plan (to close the loop)
+- exact commands to rerun
+- expected pass criteria
+- regression tests to add permanently (e.g., “help text contains no unescaped percent”)
+
+---
+
+## 3) Concrete next steps to finalize (execution plan)
+
+1) **Evidence normalization**
+   - Freeze the tested commit SHA
+   - Attach your `REALISTIC_TEST_EXECUTION_REPORT.md`, fixtures, generator script, and pytest output as immutable artifacts.
+
+2) **Correct/normalize the gap list**
+   - Reclassify:
+     - “copy_formula_down mismatch” → either remove or restate as “spec mismatch vs which document”
+     - Add: “set-number-format docs vs tool arg mismatch”
+     - Elevate: “detect_errors correctness risk” (even if tests passed)
+
+3) **Write the consolidated report**
+   - Use the structure above.
+   - Include a one-page “decision memo” summary at top.
+
+4) **Publish + gate**
+   - Put the report in-repo and/or as a GitHub Release asset.
+   - Add CI job that runs: `pytest -k realistic` + `python -m pip check` + “all tools --help smoke”.
+
+---
+
+## 4) Bottom-line assessment direction (based on your results + code confirmation)
+- The project’s *architectural thesis* (governed, agent-friendly Excel mutation via headless CLI) is still strongly supported by the repo’s docs and structure. 
+- Your realistic test run shows it is **not yet “production-grade” at the CLI contract level**, because a couple of tools fail on basic invocation patterns, and at least one tool/doc mismatch will break real automation (`xls-set-number-format`). 
+- That combination usually leads to a practical verdict of: **“Fit for controlled pilots after P0 fixes; not fit for unattended production until contract stability is proven by retest.”**
+
+If you want, I can generate a ready-to-fill **report template** (Markdown) with the tables prebuilt (Claims→Evidence→Verdict, Tool×Scenario coverage, Gap incident templates) so you can paste in your artifacts and produce the final report quickly.
+
