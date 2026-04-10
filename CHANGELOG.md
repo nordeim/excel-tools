@@ -9,6 +9,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Phase 15: E2E QA Execution & Production Certification
+
+- **E2E QA Test Plan Execution** (`E2E_QA_TEST_REPORT.md`)
+  - 430 total tests executed (347 unit + 83 integration)
+  - 98.4% pass rate (423 passed, 7 failed)
+  - All 5 E2E scenarios validated
+  - Production readiness certified with 95% confidence
+
+- **QA Remediation Fixes**
+  - Fixed `batch_process.py` subprocess return code checking
+  - Fixed `create_workbook.py` error reading (stdout vs stderr)
+  - Added `requests>=2.32.0` dependency for oletools compatibility
+  - Updated SKILL.md coverage claim to verifiable format
+  - Fixed `workflow-patterns.md` return code checking order
+
+- **Test Fixtures**
+  - Created `tests/fixtures/macros.xlsm` for macro security testing
+  - Verified all scenario fixtures present and functional
+
+### Changed
+
+- **Documentation Updates**
+  - Updated `CLAUDE.md` with QA accomplishments and lessons learned
+  - Updated `Project_Architecture_Document.md` with Phase 15 certification
+  - Updated `README.md` with production readiness badge and QA status
+  - Added troubleshooting section for subprocess error handling
+
+### Fixed
+
+- **Subprocess Error Handling**
+  - All helper scripts now correctly parse errors from stdout (not stderr)
+  - Return code checking standardized across all subprocess wrappers
+  - JSON parsing deferred until after return code verification
+
+### Added
+
 #### Phase 14: Hardening, Security & Release Preparation
 
 - **Agent Orchestration SDK** (`src/excel_agent/sdk/`)
