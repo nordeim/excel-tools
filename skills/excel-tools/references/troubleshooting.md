@@ -318,9 +318,52 @@ python --version
 
 ---
 
+## Phase 16: Realistic Test Plan - Known Issues & Fixes
+
+### Issue: Help Text Shows Format Error
+
+**Symptoms**: Tool crashes on `--help` with `ValueError: unsupported format character`
+
+**Affected**: `xls-set-number-format` (fixed in Phase 16)
+
+**Solution**: Fixed by escaping `%` in help text. Update to latest version.
+
+---
+
+### Issue: Duplicate --force Argument
+
+**Symptoms**: `argparse.ArgumentError: conflicting option string: --force`
+
+**Affected**: `xls-inject-vba-project` (fixed in Phase 16)
+
+**Solution**: Fixed by removing duplicate argument. Update to latest version.
+
+---
+
+### Issue: Named Range Reading Fails
+
+**Symptoms**: `xls-get-defined-names` returns exit code 5
+
+**Affected**: `xls-get-defined-names` (fixed in Phase 16)
+
+**Solution**: Added null-safety. Tool now returns empty list for workbooks without named ranges.
+
+---
+
+### Issue: Export Tools Don't Support --range
+
+**Symptoms**: `unrecognized arguments: --range A1:C10`
+
+**Cause**: Export tools export entire sheets, not ranges
+
+**Workaround**: Use `xls-read-range` to extract data, then pipe to CSV.
+
+---
+
 ## Getting Help
 
 1. Check tool help: `xls-<tool> --help`
 2. Review API docs: `docs/API.md`
-3. Check status codes: `src/excel_agent/utils/exit_codes.py`
-4. Run with explicit paths and `jq` for debugging
+3. Check realistic test examples: `tests/integration/test_realistic_office_workflow.py`
+4. Check status codes: `src/excel_agent/utils/exit_codes.py`
+5. Run with explicit paths and `jq` for debugging

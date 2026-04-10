@@ -188,7 +188,136 @@ elif result.returncode == 5:
     print("Internal error - check traceback")
 ```
 
-## Python Integration Pattern
+## Pattern 9: Realistic Office Workflow (Phase 16)
+
+**Use Case**: Process expense report with structured references and named ranges.
+
+```bash
+# 1. Clone realistic office workbook
+xls-clone-workbook --input OfficeOps_Expenses_KPI.xlsx --output-dir ./work/
+
+# 2. Read expense data with structured references
+xls-read-range --input ./work/OfficeOps_*.xlsx --sheet Raw_Expenses --range A1:J201
+
+# 3. Get named ranges (Categories, Departments, TaxRate)
+xls-get-defined-names --input ./work/OfficeOps_*.xlsx
+
+# 4. Set formula for FX calculation
+xls-set-formula --input ./work/OfficeOps_*.xlsx --sheet Raw_Expenses --cell G2 \
+  --formula '=IF(F2="USD",1,XLOOKUP(F2,FXRates!A:A,FXRates!B:B))'
+
+# 5. Copy formula down (preferred API)
+xls-copy-formula-down --input ./work/OfficeOps_*.xlsx --sheet Raw_Expenses \
+  --source G2 --target G2:G201
+
+# 6. Recalculate
+xls-recalculate --input ./work/OfficeOps_*.xlsx --output ./work/calculated.xlsx
+
+# 7. Export to CSV (note: exports full sheet)
+xls-export-csv --input ./work/calculated.xlsx --sheet Raw_Expenses --outfile expenses.csv
+
+# 8. Validate
+xls-validate-workbook --input ./work/calculated.xlsx
+```
+
+**Key Phase 16 Insights**:
+- Named ranges return empty list (not error) when workbook has none
+- Export tools don't support `--range` - export full sheet only
+- Use `--source/--target` for `xls-copy-formula-down` (preferred API)
+
+---
+
+## Python Integration with Realistic Error Handling
+
+```python
+import subprocess
+import json
+from pathlib import Path
+
+def run_tool(tool: str, **kwargs) -> dict:
+    """Run an excel-agent tool with realistic error handling."""
+    cmd = [f"xls-{tool}"]
+    for key, value in kwargs.items():
+        cmd.extend([f"--{key.replace('_', '-')}", str(value)])
+    
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    
+    # Phase 16: Check returncode BEFORE parsing JSON
+    if result.returncode != 0:
+        try:
+            # Tools write errors to stdout
+            error_data = json.loads(result.stdout)
+            raise RuntimeError(f"Tool failed: {error_data.get('error', 'unknown error')}")
+        except json.JSONDecodeError:
+            raise RuntimeError(f"Tool failed: {result.stdout or result.stderr}")
+    
+    return json.loads(result.stdout)
+
+# Realistic office workflow
+try:
+    # Clone
+    result = run_tool("clone-workbook", input="OfficeOps_Expenses_KPI.xlsx", output_dir="./work/")
+    clone_path = result["data"]["clone_path"]
+    
+    # Get named ranges
+    result = run_tool("get-defined-names", input=clone_path)
+    named_ranges = result["data"]["named_ranges"]
+    print(f"Found {len(named_ranges)} named ranges")
+    
+    # Read expense data
+    result = run_tool("read-range", input=clone_path, sheet="Raw_Expenses", range="A1:J10")
+    values = result["data"]["values"]
+    
+    # Process...
+    
+except RuntimeError as e:
+    print(f"Workflow failed: {e}")
+    # Handle specific error based on message
+```
+
+---
+
+## Error Handling Patterns
+
+### Pattern 1: Check Return Code First
+```python
+result = subprocess.run(cmd, capture_output=True, text=True)
+
+# Phase 16 lesson: Check returncode BEFORE json.loads
+if result.returncode != 0:
+    # Parse error from stdout (not stderr)
+    error = json.loads(result.stdout)
+    handle_error(error)
+else:
+    data = json.loads(result.stdout)
+    process_data(data)
+```
+
+### Pattern 2: Structured Reference Handling
+```python
+# Check if structured references exist
+result = run_tool("get-defined-names", input=workbook)
+named_ranges = result["data"]["named_ranges"]
+
+# Look for table references
+for nr in named_ranges:
+    if "[" in nr["refers_to"]:  # Structured reference
+        print(f"Table found: {nr['name']} -> {nr['refers_to']}")
+```
+
+### Pattern 3: Dual API Support
+```python
+# Try preferred API first, fallback to legacy
+try:
+    result = run_tool("copy-formula-down", input=wb, source="A1", target="A1:A10")
+except RuntimeError:
+    # Fallback to legacy API
+    result = run_tool("copy-formula-down", input=wb, cell="A1", count=9)
+```
+
+---
+
+## Original Python Integration Pattern
 
 ```python
 import subprocess
@@ -200,9 +329,9 @@ def run_tool(tool: str, **kwargs) -> dict:
     cmd = [f"xls-{tool}"]
     for key, value in kwargs.items():
         cmd.extend([f"--{key.replace('_', '-')}", str(value)])
-
+    
     result = subprocess.run(cmd, capture_output=True, text=True)
-
+    
     if result.returncode != 0:
         # Parse error from stdout (excel-agent-tools writes JSON errors to stdout)
         try:
@@ -210,7 +339,7 @@ def run_tool(tool: str, **kwargs) -> dict:
             raise RuntimeError(f"Tool failed: {error_data.get('error', 'unknown')}")
         except json.JSONDecodeError:
             raise RuntimeError(f"Tool failed: {result.stdout or result.stderr}")
-
+    
     data = json.loads(result.stdout)
     
     return data

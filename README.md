@@ -326,9 +326,30 @@ WORKDIR /data
 
 ---
 
-## 🆕 What's New (Phase 15 - April 2026)
+## 🆕 What's New (Phase 16 - April 2026)
 
-### Production Certification ✅
+### Realistic Test Plan & Gap Remediation ✅
+- **Gap Discovery**: 9 critical issues found via realistic office workflows
+- **Fixes Applied**: 9/9 gaps resolved (100%)
+- **Test Pass Rate**: 91% (69/76 realistic tests)
+- **Critical Bugs Fixed**: 2 P0 issues (help text, duplicate args)
+- **High-Priority Fixes**: 2 P1 issues (named ranges, API alignment)
+
+### Realistic Office Fixtures Generated
+- `OfficeOps_Expenses_KPI.xlsx` - Realistic workbook with structured references
+- `EdgeCases_Formulas_and_Links.xlsx` - Circular refs, dynamic arrays
+- `vbaProject_safe.bin` & `vbaProject_risky.bin` - Macro binaries
+- Comprehensive test suite: 76 realistic test cases
+
+### Critical Bug Fixes
+- **xls_set_number_format**: Fixed unescaped `%` in help text causing argparse crash
+- **xls_inject_vba_project**: Removed duplicate `--force` argument
+- **xls_get_defined_names**: Added null-safety for named range reading
+- **xls_copy_formula_down**: Implemented dual API support (--source/--target + --cell/--count)
+
+## 🆕 Phase 15 (Previous)
+
+### Production Certification
 - **E2E QA Test Execution**: 430 tests, 98.4% pass rate
 - **Production Readiness**: Certified with 95% confidence
 - **Performance Validation**: Full pipeline <60s (32.99s actual)

@@ -219,24 +219,33 @@ xls-get-workbook-metadata --input workbook.xlsx
 ---
 
 ### xls-get-defined-names
-**Purpose**: List named ranges.
+**Purpose**: List all named ranges (global and sheet-scoped) with robust error handling.
 
-**CLI**:
+**CLI**: 
 ```bash
 xls-get-defined-names --input workbook.xlsx
 ```
 
-**Output**:
+**Output**: 
 ```json
 {
   "status": "success",
   "data": {
     "named_ranges": [
-      {"name": "SalesData", "scope": "workbook", "refers_to": "Sheet3!$A$1:$B$5"}
-    ]
-  }
+      {"name": "SalesData", "scope": "workbook", "refers_to": "Sheet3!$A$1:$B$5", "hidden": false, "is_reserved": false},
+      {"name": "TaxRate", "scope": "Lists", "refers_to": "Lists!$D$2", "hidden": false, "is_reserved": false}
+    ],
+    "count": 2
+  },
+  "workbook_version": "sha256:abc..."
 }
 ```
+
+**Notes**:
+- Handles workbooks with no named ranges (returns empty list)
+- Supports both workbook-level and sheet-level named ranges
+- Returns `hidden` and `is_reserved` status for each named range
+- Safe for use with all openpyxl versions
 
 ---
 
@@ -501,7 +510,41 @@ xls-write-cell --input workbook.xlsx --output workbook.xlsx --cell A1 \
 **CLI**: `xls-convert-to-values --input X --output X --range A1:C10 --token T`
 
 ### xls-copy-formula-down
-**CLI**: `xls-copy-formula-down --input X --output X --cell A1 --count 10`
+
+**Purpose**: Copy formula from source cell down to target cells with reference adjustment.
+
+**CLI (Preferred API)**: `xls-copy-formula-down --input X --output X --source A1 --target A1:A10`  
+**CLI (Legacy API)**: `xls-copy-formula-down --input X --output X --cell A1 --count 10`  
+**Note**: `--source`/`--target` is preferred over `--cell`/`--count` (deprecated but still supported)
+
+**Output**:
+```json
+{
+  "status": "success",
+  "data": {
+    "source": "A1",
+    "target": "A1:A10",
+    "filled_count": 9,
+    "filled_range": "A2:A10"
+  },
+  "impact": {
+    "cells_modified": 9,
+    "formulas_added": 9
+  }
+}
+```
+
+**Examples**:
+```bash
+# Preferred: Use range syntax
+xls-copy-formula-down --input data.xlsx --output data.xlsx --source A1 --target A1:A10
+
+# Legacy: Use count
+xls-copy-formula-down --input data.xlsx --output data.xlsx --cell A1 --count 9
+
+# On specific sheet
+xls-copy-formula-down --input data.xlsx --sheet Sales --source B2 --target B2:B20
+```
 
 ### xls-define-name
 **CLI**: `xls-define-name --input X --output X --name "SalesData" --refers-to "Sheet1!A1:B10"`
@@ -542,7 +585,32 @@ xls-write-cell --input workbook.xlsx --output workbook.xlsx --cell A1 \
 **CLI**: `xls-apply-conditional-formatting --input X --output X --range A1:A100 --type colorscale --colors '["FF0000", "FFFF00", "00FF00"]'`
 
 ### xls-set-number-format
+**Purpose**: Apply number formats to cell ranges. **Important**: Format codes with `%` must be properly escaped.
+
 **CLI**: `xls-set-number-format --input X --output X --range A1:A10 --format '$#,##0.00'`
+
+**Common Formats**:
+- Currency: `'$'#,##0.00` or `'€'#,##0.00`
+- Percentage: `0.00%` (note: internally escaped as `0.00%%`)
+- Date: `yyyy-mm-dd` or `mm/dd/yyyy`
+- Scientific: `0.00E+00`
+- Custom: Any valid Excel format code
+
+**Output**:
+```json
+{
+  "status": "success",
+  "data": {
+    "range": "A1:A10",
+    "format": "$#,##0.00",
+    "format_description": "Currency with dollar sign",
+    "cells_formatted": 10
+  },
+  "impact": {"cells_formatted": 10}
+}
+```
+
+**Note**: This tool was patched in Phase 16 to fix an argparse format specifier bug with `%` characters in help text.
 
 ---
 
