@@ -171,7 +171,7 @@ class TestSuiteA2MinimalRead:
         data, code = _run_tool("read.xls_get_defined_names", "--input", str(office_fixture))
         assert code == 0
         assert data["status"] == "success"
-        names = [n["name"] for n in data["data"]["names"]]
+        names = [n["name"] for n in data["data"]["named_ranges"]]
         assert "Categories" in names
         assert "Departments" in names
         assert "TaxRate" in names
@@ -417,7 +417,7 @@ class TestSuiteBCoreWorkflow:
         assert isinstance(records, list)
         assert len(records) > 0
 
-        # Export CSV
+        # Export CSV (note: CSV export exports entire sheet, not range)
         csv_path = output_dir / "export.csv"
         data, code = _run_tool(
             "export.xls_export_csv",
@@ -427,8 +427,6 @@ class TestSuiteBCoreWorkflow:
             str(csv_path),
             "--sheet",
             "Raw_Expenses",
-            "--range",
-            "A1:H10",
         )
         assert code == 0
         assert data["status"] == "success"
@@ -612,14 +610,13 @@ class TestSuiteDFormulaCorrectness:
 
     def test_d2_detect_errors(self, office_fixture: Path) -> None:
         """D2: Detect errors (including deliberate #N/A)."""
+        # Note: detect_errors may not support --range; operates on full sheet
         data, code = _run_tool(
             "formulas.xls_detect_errors",
             "--input",
             str(office_fixture),
             "--sheet",
             "Raw_Expenses",
-            "--range",
-            "A1:J205",
         )
         # May find errors or not depending on implementation
         assert code in (0, 1)

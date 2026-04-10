@@ -89,11 +89,7 @@ def _run() -> dict[str, object]:
         required=True,
         help="Path to vbaProject.bin file to inject",
     )
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Inject even if risk level is high/critical",
-    )
+    # Note: --force is already added by add_governance_args()
     args = parser.parse_args()
 
     target_path = validate_input_path(args.input)

@@ -65,7 +65,7 @@ def _run() -> dict[str, object]:
         type=str,
         required=True,
         dest="number_format",
-        help="Excel number format code (e.g., '\"$\"#,##0.00', '0.00%', 'yyyy-mm-dd')",
+        help="Excel number format code (e.g., '\"$\"#,##0.00', '0.00%%', 'yyyy-mm-dd')",
     )
     args = parser.parse_args()
 

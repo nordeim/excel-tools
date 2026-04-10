@@ -17,12 +17,41 @@ from openpyxl.utils import get_column_letter
 def _run() -> dict:
     parser = create_parser("Copy formula from source cell down to target cells.")
     add_common_args(parser)
-    parser.add_argument("--cell", type=str, required=True, help="Source cell (e.g., A1)")
-    parser.add_argument("--count", type=int, required=True, help="Number of cells to fill")
+    parser.add_argument(
+        "--source", type=str, help="Source cell (e.g., A1) - preferred over --cell"
+    )
+    parser.add_argument("--cell", type=str, help="Source cell (deprecated, use --source)")
+    parser.add_argument("--target", type=str, help="Target range (e.g., A1:A10)")
+    parser.add_argument(
+        "--count", type=int, help="Number of cells to fill (deprecated, use --target)"
+    )
     args = parser.parse_args()
 
     input_path = validate_input_path(args.input)
     output_path = validate_output_path(args.output)
+
+    # Handle both APIs (prefer --source over --cell)
+    source = args.source or args.cell
+    if not source:
+        parser.error("--source (or deprecated --cell) is required")
+
+    # Parse target or count
+    if args.target:
+        # Parse range to get count
+        from openpyxl.utils import range_boundaries
+
+        try:
+            min_col, min_row, max_col, max_row = range_boundaries(args.target)
+            if min_row and max_row:
+                count = max_row - min_row + 1
+            else:
+                count = 1
+        except Exception:
+            count = 1
+    elif args.count:
+        count = args.count
+    else:
+        parser.error("--target or --count is required")
 
     formulas_copied = 0
 
@@ -35,7 +64,7 @@ def _run() -> dict:
         from excel_agent.core.serializers import RangeSerializer
 
         serializer = RangeSerializer(wb)
-        coord = serializer.parse(args.cell, default_sheet=sheet_name)
+        coord = serializer.parse(source, default_sheet=sheet_name)
         source_row = coord.min_row
         source_col = coord.min_col
 
@@ -52,7 +81,7 @@ def _run() -> dict:
         source_formula = source_cell.value
 
         # Copy down with reference adjustment
-        for i in range(1, args.count + 1):
+        for i in range(1, count + 1):
             target_row = source_row + i
             target_cell = ws.cell(row=target_row, column=source_col)
 
@@ -62,12 +91,17 @@ def _run() -> dict:
             target_cell.value = adjusted
             formulas_copied += 1
 
+    # Calculate filled range
+    filled_range = f"{get_column_letter(source_col)}{source_row + 1}:{get_column_letter(source_col)}{source_row + count}"
+
     return build_response(
         "success",
         {
-            "source": args.cell,
+            "source": source,
+            "target": args.target
+            or f"{source}:{get_column_letter(source_col)}{source_row + count}",
             "filled_count": formulas_copied,
-            "filled_range": f"{get_column_letter(source_col)}{source_row + 1}:{get_column_letter(source_col)}{source_row + args.count}",
+            "filled_range": filled_range,
         },
         impact={"cells_modified": formulas_copied, "formulas_added": formulas_copied},
         workbook_version=agent.version_hash,
