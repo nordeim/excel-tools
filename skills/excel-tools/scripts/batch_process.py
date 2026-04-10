@@ -12,17 +12,43 @@ from pathlib import Path
 
 
 def run_tool(tool: str, **kwargs) -> dict:
-    """Run an excel-agent tool."""
+    """Run an excel-agent tool with comprehensive error handling.
+
+    Properly validates subprocess return codes and parses JSON responses.
+
+    Args:
+        tool: Tool name (without xls- prefix)
+        **kwargs: Tool arguments as keyword args
+
+    Returns:
+        Parsed JSON response or error dict with exit_code
+    """
     cmd = [f"xls-{tool}"]
     for key, value in kwargs.items():
         cmd.extend([f"--{key.replace('_', '-')}", str(value)])
 
     result = subprocess.run(cmd, capture_output=True, text=True)
 
+    # Phase 14 Fix: Check return code before parsing JSON
+    if result.returncode != 0:
+        try:
+            # Tool may return structured error JSON in stdout
+            error_data = json.loads(result.stdout)
+            return error_data
+        except json.JSONDecodeError:
+            return {
+                "status": "error",
+                "exit_code": result.returncode,
+                "error": result.stderr
+                or result.stdout
+                or f"Tool exited with code {result.returncode}",
+            }
+
+    # Success path
     try:
         return json.loads(result.stdout)
     except json.JSONDecodeError:
-        return {"status": "error", "error": result.stderr or result.stdout}
+        return {"status": "error", "error": f"Invalid JSON in tool output: {result.stdout[:200]}"}
 
 
 def process_file(input_path: str, output_dir: str, operations: list) -> dict:

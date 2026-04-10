@@ -34,7 +34,12 @@ def create_workbook(
     )
 
     if result.returncode != 0:
-        return {"status": "error", "error": result.stderr}
+        # excel-agent-tools writes JSON errors to stdout, not stderr
+        try:
+            error_data = json.loads(result.stdout)
+            return error_data
+        except json.JSONDecodeError:
+            return {"status": "error", "error": result.stdout or result.stderr}
 
     # Write data if provided
     if data:

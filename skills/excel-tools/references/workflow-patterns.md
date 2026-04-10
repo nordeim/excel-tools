@@ -200,12 +200,18 @@ def run_tool(tool: str, **kwargs) -> dict:
     cmd = [f"xls-{tool}"]
     for key, value in kwargs.items():
         cmd.extend([f"--{key.replace('_', '-')}", str(value)])
-    
+
     result = subprocess.run(cmd, capture_output=True, text=True)
-    data = json.loads(result.stdout)
-    
+
     if result.returncode != 0:
-        raise RuntimeError(f"Tool failed: {data.get('error', 'unknown')}")
+        # Parse error from stdout (excel-agent-tools writes JSON errors to stdout)
+        try:
+            error_data = json.loads(result.stdout)
+            raise RuntimeError(f"Tool failed: {error_data.get('error', 'unknown')}")
+        except json.JSONDecodeError:
+            raise RuntimeError(f"Tool failed: {result.stdout or result.stderr}")
+
+    data = json.loads(result.stdout)
     
     return data
 

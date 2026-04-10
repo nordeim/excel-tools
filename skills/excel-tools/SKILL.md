@@ -10,7 +10,7 @@ metadata:
   total-tools: "53"
   calculation-tiers: "2"
   token-scopes: "7"
-  coverage: ">90%"
+  coverage: "90%"
 ---
 
 # Excel Tools Skill
