@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from excel_agent.core.agent import ExcelAgent
 from excel_agent.core.dependency import DependencyTracker
+from excel_agent.core.edit_session import EditSession
 from excel_agent.core.formula_updater import adjust_row_references
 from excel_agent.core.version_hash import compute_file_hash
 from excel_agent.governance.audit_trail import AuditTrail
@@ -48,8 +48,11 @@ def _run() -> dict:
     mgr = ApprovalTokenManager()
     mgr.validate_token(args.token, expected_scope="range:delete", expected_file_hash=file_hash)
 
-    with ExcelAgent(input_path, mode="rw") as agent:
-        wb = agent.workbook
+    # Use EditSession for proper copy-on-write and save semantics
+    session = EditSession.prepare(input_path, output_path)
+
+    with session:
+        wb = session.workbook
         sheet_name = args.sheet or wb.sheetnames[0]
         ws = wb[sheet_name]
         end_row = args.start_row + args.count - 1
@@ -75,31 +78,33 @@ def _run() -> dict:
 
         formulas_updated = adjust_row_references(wb, sheet_name, args.start_row, -args.count)
 
-        if str(output_path) != str(input_path):
-            wb.save(str(output_path))
+        # Capture version hash before exiting context
+        version_hash = session.version_hash
 
-        audit = AuditTrail()
-        audit.log_operation(
-            tool="xls_delete_rows",
-            scope="range:delete",
-            resource=f"{sheet_name}!rows {args.start_row}-{end_row}",
-            action="delete",
-            outcome="success",
-            token_used=True,
-            file_hash=file_hash,
-        )
+        # EditSession handles save automatically on exit
 
-        return build_response(
-            "success",
-            {
-                "sheet": sheet_name,
-                "start_row": args.start_row,
-                "rows_deleted": args.count,
-                "impact": report.to_dict(),
-            },
-            workbook_version=agent.version_hash,
-            impact={"cells_modified": 0, "formulas_updated": formulas_updated},
-        )
+    audit = AuditTrail()
+    audit.log_operation(
+        tool="xls_delete_rows",
+        scope="range:delete",
+        resource=f"{sheet_name}!rows {args.start_row}-{end_row}",
+        action="delete",
+        outcome="success",
+        token_used=True,
+        file_hash=session.file_hash,
+    )
+
+    return build_response(
+        "success",
+        {
+            "sheet": sheet_name,
+            "start_row": args.start_row,
+            "rows_deleted": args.count,
+            "impact": report.to_dict(),
+        },
+        workbook_version=version_hash,
+        impact={"cells_modified": 0, "formulas_updated": formulas_updated},
+    )
 
 
 def main() -> None:

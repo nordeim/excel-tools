@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from openpyxl.utils import column_index_from_string
 
-from excel_agent.core.agent import ExcelAgent
+from excel_agent.core.edit_session import EditSession
 from excel_agent.core.formula_updater import adjust_col_references
 from excel_agent.tools._tool_base import run_tool
 from excel_agent.utils.cli_helpers import (
@@ -40,16 +40,19 @@ def _run() -> dict:
 
     col_idx = _parse_column(args.before_column)
 
-    with ExcelAgent(input_path, mode="rw") as agent:
-        wb = agent.workbook
+    session = EditSession.prepare(input_path, output_path)
+    with session:
+        wb = session.workbook
         sheet_name = args.sheet or wb.sheetnames[0]
         ws = wb[sheet_name]
 
         ws.insert_cols(idx=col_idx, amount=args.count)
         formulas_updated = adjust_col_references(wb, sheet_name, col_idx, args.count)
 
-        if str(output_path) != str(input_path):
-            wb.save(str(output_path))
+        # Capture version hash before exiting context
+        version_hash = session.version_hash
+
+        # EditSession handles save automatically on exit
 
     return build_response(
         "success",
@@ -58,7 +61,7 @@ def _run() -> dict:
             "before_column": args.before_column,
             "columns_inserted": args.count,
         },
-        workbook_version=agent.version_hash,
+        workbook_version=version_hash,
         impact={"cells_modified": 0, "formulas_updated": formulas_updated},
     )
 

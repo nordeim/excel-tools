@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from openpyxl.formula import Tokenizer
 
-from excel_agent.core.agent import ExcelAgent
+from excel_agent.core.edit_session import EditSession
 from excel_agent.tools._tool_base import run_tool
 from excel_agent.utils.cli_helpers import (
     add_common_args,
@@ -67,14 +67,17 @@ def _run() -> dict[str, object]:
             details={"formula": formula, "warnings": syntax_warnings},
         )
 
-    with ExcelAgent(input_path, mode="rw") as agent:
-        wb = agent.workbook
+    session = EditSession.prepare(input_path, output_path)
+    with session:
+        wb = session.workbook
         sheet_name = args.sheet or wb.sheetnames[0]
         ws = wb[sheet_name]
         ws[args.cell] = formula
 
-        if str(output_path) != str(input_path):
-            wb.save(str(output_path))
+        # Capture version hash before exiting context
+        version_hash = session.version_hash
+
+        # EditSession handles save automatically on exit
 
     return build_response(
         "success",
@@ -84,7 +87,7 @@ def _run() -> dict[str, object]:
             "formula": formula,
             "syntax_warnings": syntax_warnings,
         },
-        workbook_version=agent.version_hash,
+        workbook_version=version_hash,
         impact={"cells_modified": 1, "formulas_updated": 1},
         warnings=syntax_warnings if syntax_warnings else None,
     )

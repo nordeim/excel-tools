@@ -40,11 +40,23 @@ def _run() -> dict:
     output_path = validate_output_path(args.output, create_parents=True)
     variables: dict = parse_json_arg(args.vars)
 
-    # Load template — set template=False so output is a regular workbook
-    # Per openpyxl docs: "You should monitor the data attributes and document
-    # extensions for saving documents in the document templates and vice versa"
-    wb = load_workbook(str(template_path))
+    # Detect if template has macros (.xltm or .xlsm)
+    template_ext = template_path.suffix.lower()
+    keep_vba = template_ext in {".xltm", ".xlsm"}
+
+    # Load template with macro preservation if applicable
+    wb = load_workbook(str(template_path), keep_vba=keep_vba)
     wb.template = False
+
+    warnings = []
+
+    # Check for macro loss when converting .xltm/.xlsm to .xlsx
+    output_ext = output_path.suffix.lower()
+    if keep_vba and output_ext not in {".xlsm", ".xltm"}:
+        warnings.append(
+            f"Template contains macros but output is {output_ext}. "
+            f"Use .xlsm extension to preserve macros."
+        )
 
     # Perform variable substitution across all sheets
     substitutions_made = 0
@@ -85,6 +97,7 @@ def _run() -> dict:
         },
         workbook_version=file_hash,
         impact={"cells_modified": substitutions_made, "formulas_updated": 0},
+        warnings=warnings if warnings else None,
     )
 
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from excel_agent.core.agent import ExcelAgent
+from excel_agent.core.edit_session import EditSession
 from excel_agent.core.formula_updater import rename_sheet_in_formulas
 from excel_agent.core.version_hash import compute_file_hash
 from excel_agent.governance.audit_trail import AuditTrail
@@ -42,8 +42,9 @@ def _run() -> dict:
     mgr = ApprovalTokenManager()
     mgr.validate_token(args.token, expected_scope="sheet:rename", expected_file_hash=file_hash)
 
-    with ExcelAgent(input_path, mode="rw") as agent:
-        wb = agent.workbook
+    session = EditSession.prepare(input_path, output_path)
+    with session:
+        wb = session.workbook
 
         if args.old_name not in wb.sheetnames:
             raise ValidationError(f"Sheet {args.old_name!r} not found")
@@ -56,8 +57,10 @@ def _run() -> dict:
         # Rename the sheet
         wb[args.old_name].title = args.new_name
 
-        if str(output_path) != str(input_path):
-            wb.save(str(output_path))
+        # Capture version hash before exiting context
+        version_hash = session.version_hash
+
+        # EditSession handles save automatically on exit
 
         audit = AuditTrail()
         audit.log_operation(
@@ -78,7 +81,7 @@ def _run() -> dict:
                 "new_name": args.new_name,
                 "sheets": list(wb.sheetnames),
             },
-            workbook_version=agent.version_hash,
+            workbook_version=version_hash,
             impact={"cells_modified": 0, "formulas_updated": formulas_updated},
         )
 

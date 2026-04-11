@@ -20,7 +20,7 @@ from typing import Any
 
 from openpyxl.utils import get_column_letter
 
-from excel_agent.core.agent import ExcelAgent
+from excel_agent.core.edit_session import EditSession
 from excel_agent.core.dependency import DependencyTracker
 from excel_agent.core.formula_updater import adjust_col_references, adjust_row_references
 from excel_agent.core.serializers import RangeSerializer
@@ -68,8 +68,9 @@ def _run() -> dict[str, Any]:
     mgr = ApprovalTokenManager()
     mgr.validate_token(args.token, "range:delete", input_path)
 
-    with ExcelAgent(input_path, mode="rw") as agent:
-        wb = agent.workbook
+    session = EditSession.prepare(input_path, output_path)
+    with session:
+        wb = session.workbook
         serializer = RangeSerializer(workbook=wb)
         coord = serializer.parse(args.range, default_sheet=args.sheet)
 
@@ -131,8 +132,10 @@ def _run() -> dict[str, Any]:
             cells_shifted = (max_row - min_row + 1) * (ws.max_column - max_col)
             formulas_updated = adjust_col_references(wb, sheet_name, max_col + 1, -col_span)
 
-        if str(output_path) != str(input_path):
-            wb.save(str(output_path))
+        # Capture version hash before exiting context
+        version_hash = session.version_hash
+
+        # EditSession handles save automatically on exit
 
         audit = AuditTrail()
         audit.log(
@@ -157,7 +160,7 @@ def _run() -> dict[str, Any]:
                 "cells_shifted": cells_shifted,
                 "impact": report.to_dict(),
             },
-            workbook_version=agent.version_hash,
+            workbook_version=version_hash,
             impact={
                 "cells_modified": row_span * col_span + cells_shifted,
                 "formulas_updated": formulas_updated,

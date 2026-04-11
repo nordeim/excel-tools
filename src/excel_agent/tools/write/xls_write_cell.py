@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from excel_agent.core.agent import ExcelAgent
+from excel_agent.core.edit_session import EditSession
 from excel_agent.core.type_coercion import coerce_cell_value, infer_cell_value
 from excel_agent.tools._tool_base import run_tool
 from excel_agent.utils.cli_helpers import (
@@ -44,8 +44,11 @@ def _run() -> dict:
     input_path = validate_input_path(args.input)
     output_path = validate_output_path(args.output or args.input, create_parents=True)
 
-    with ExcelAgent(input_path, mode="rw") as agent:
-        wb = agent.workbook
+    # Use EditSession for proper copy-on-write and save semantics
+    session = EditSession.prepare(input_path, output_path)
+
+    with session:
+        wb = session.workbook
         sheet_name = args.sheet or wb.sheetnames[0]
         ws = wb[sheet_name]
         cell = ws[args.cell]
@@ -59,8 +62,10 @@ def _run() -> dict:
 
         is_formula = isinstance(coerced, str) and coerced.startswith("=")
 
-        if str(output_path) != str(input_path):
-            wb.save(str(output_path))
+        # Capture version hash before exiting context
+        version_hash = session.version_hash
+
+        # EditSession handles save automatically on exit
 
     return build_response(
         "success",
@@ -71,7 +76,7 @@ def _run() -> dict:
             "type_used": args.type or "auto",
             "is_formula": is_formula,
         },
-        workbook_version=agent.version_hash,
+        workbook_version=version_hash,
         impact={
             "cells_modified": 1,
             "formulas_updated": 1 if is_formula else 0,

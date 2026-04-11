@@ -21,7 +21,7 @@ import re
 from openpyxl.formula import Tokenizer
 from openpyxl.formula.tokenizer import Token
 
-from excel_agent.core.agent import ExcelAgent
+from excel_agent.core.edit_session import EditSession
 from excel_agent.tools._tool_base import run_tool
 from excel_agent.utils.cli_helpers import (
     add_common_args,
@@ -123,8 +123,9 @@ def _run() -> dict[str, object]:
         old_norm = _normalize_ref(str(entry["old"]))
         update_map[old_norm] = str(entry["new"])
 
-    with ExcelAgent(input_path, mode="rw") as agent:
-        wb = agent.workbook
+    session = EditSession.prepare(input_path, output_path)
+    with session:
+        wb = session.workbook
         formulas_updated = 0
         update_details: list[dict[str, object]] = []
 
@@ -161,8 +162,10 @@ def _run() -> dict[str, object]:
                     defn.attr_text = new_text
                     defined_names_updated += 1
 
-        if str(output_path) != str(input_path):
-            wb.save(str(output_path))
+        # Capture version hash before exiting context
+        version_hash = session.version_hash
+
+        # EditSession handles save automatically on exit
 
         return build_response(
             "success",
@@ -172,7 +175,7 @@ def _run() -> dict[str, object]:
                 "defined_names_updated": defined_names_updated,
                 "update_details": update_details,
             },
-            workbook_version=agent.version_hash,
+            workbook_version=version_hash,
             impact={
                 "cells_modified": 0,
                 "formulas_updated": formulas_updated + defined_names_updated,

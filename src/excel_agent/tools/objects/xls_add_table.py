@@ -9,14 +9,14 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from openpyxl import load_workbook
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
-from excel_agent.core.version_hash import compute_file_hash
+from excel_agent.core.edit_session import EditSession
 from excel_agent.governance.audit_trail import AuditTrail
 from excel_agent.tools._tool_base import run_tool
 from excel_agent.utils.cli_helpers import (
     add_common_args,
+    check_macro_contract,
     create_parser,
     validate_input_path,
     validate_output_path,
@@ -108,9 +108,14 @@ def _run() -> dict[str, object]:
     args = parser.parse_args()
 
     input_path = validate_input_path(args.input)
-    output_path = validate_output_path(args.output or str(input_path), create_parents=True)
+    output_path = validate_output_path(
+        args.output or str(input_path),
+        create_parents=True,
+    )
 
-    file_hash = compute_file_hash(input_path)
+    # Check for macro loss warning
+    macro_warning = check_macro_contract(input_path, output_path)
+    warnings = [macro_warning] if macro_warning else []
 
     # Validate table name
     if not _is_valid_table_name(args.name):
@@ -139,96 +144,97 @@ def _run() -> dict[str, object]:
             ],
         )
 
-    # Load workbook
-    wb = load_workbook(str(input_path))
-    ws = wb[args.sheet] if args.sheet else wb.active
+    # Use EditSession for proper locking and save semantics
+    session = EditSession.prepare(input_path, output_path)
 
-    # Check if table name already exists
-    for table in ws.tables.values():
-        if table.displayName == args.name:
+    with session:
+        wb = session.workbook
+        ws = wb[args.sheet] if args.sheet else wb.active
+
+        # Check if table name already exists
+        for table in ws.tables.values():
+            if table.displayName == args.name:
+                return build_response(
+                    "error",
+                    None,
+                    exit_code=1,
+                    warnings=[
+                        f"Table name '{args.name}' already exists in this workbook",
+                        "Table names must be unique workbook-wide",
+                    ],
+                )
+
+        # Parse range
+        try:
+            from openpyxl.utils import range_boundaries
+
+            min_col, min_row, max_col, max_row = range_boundaries(args.range)
+            if min_col is None or min_row is None:
+                raise ValueError("Invalid range format")
+            # Handle single-cell case
+            if max_col is None:
+                max_col = min_col
+            if max_row is None:
+                max_row = min_row
+        except Exception as e:
             return build_response(
                 "error",
                 None,
                 exit_code=1,
-                warnings=[
-                    f"Table name '{args.name}' already exists in this workbook",
-                    "Table names must be unique workbook-wide",
-                ],
+                warnings=[f"Failed to parse range '{args.range}': {e}"],
             )
 
-    # Parse range
-    try:
-        from openpyxl.utils import range_boundaries
+        # Validate range has at least header row + one data row
+        if max_row < min_row + 1:
+            warnings.append("Range has only one row. Tables typically need headers + data.")
 
-        min_col, min_row, max_col, max_row = range_boundaries(args.range)
-        if min_col is None or min_row is None:
-            raise ValueError("Invalid range format")
-        # Handle single-cell case
-        if max_col is None:
-            max_col = min_col
-        if max_row is None:
-            max_row = min_row
-    except Exception as e:
-        return build_response(
-            "error",
-            None,
-            exit_code=1,
-            warnings=[f"Failed to parse range '{args.range}': {e}"],
+        # Check for overlapping tables
+        for existing_table in ws.tables.values():
+            existing_ref = existing_table.ref
+            from openpyxl.utils import range_boundaries
+
+            ec1, er1, ec2, er2 = range_boundaries(existing_ref)
+            # Check overlap
+            if not (max_col < ec1 or min_col > ec2 or max_row < er1 or min_row > er2):
+                return build_response(
+                    "error",
+                    None,
+                    exit_code=1,
+                    warnings=[
+                        f"Range {args.range} overlaps with existing table "
+                        f"'{existing_table.displayName}'",
+                        "Table ranges must not overlap",
+                    ],
+                )
+
+        # Create table
+        table = Table(displayName=args.name, ref=args.range)
+
+        # Apply style
+        style = TableStyleInfo(
+            name=args.style,
+            showFirstColumn=False,
+            showLastColumn=False,
+            showRowStripes=args.show_row_stripes,
+            showColumnStripes=False,
         )
+        table.tableStyleInfo = style
 
-    # Validate range has at least header row + one data row
-    if max_row < min_row + 1:
-        return build_response(
-            "warning",
-            None,
-            exit_code=0,
-            warnings=["Range has only one row. Tables typically need headers + data."],
-        )
+        # Add table to worksheet
+        ws.add_table(table)
 
-    # Check for overlapping tables
-    for existing_table in ws.tables.values():
-        existing_ref = existing_table.ref
-        from openpyxl.utils import range_boundaries
+        # Capture version hash before exiting context
+        version_hash = session.version_hash
 
-        ec1, er1, ec2, er2 = range_boundaries(existing_ref)
-        # Check overlap
-        if not (max_col < ec1 or min_col > ec2 or max_row < er1 or min_row > er2):
-            return build_response(
-                "error",
-                None,
-                exit_code=1,
-                warnings=[
-                    f"Range {args.range} overlaps with existing table '{existing_table.displayName}'",
-                    "Table ranges must not overlap",
-                ],
-            )
+        # EditSession handles save automatically on exit
 
-    # Create table
-    table = Table(displayName=args.name, ref=args.range)
-
-    # Apply style
-    style = TableStyleInfo(
-        name=args.style,
-        showFirstColumn=False,
-        showLastColumn=False,
-        showRowStripes=args.show_row_stripes,
-        showColumnStripes=False,
-    )
-    table.tableStyleInfo = style
-
-    # Add table to worksheet
-    ws.add_table(table)
-
-    # Save workbook
-    wb.save(str(output_path))
-
-    # Log to audit trail
+    # Log to audit trail (after successful save)
     audit = AuditTrail()
     audit.log(
         tool="xls_add_table",
         scope="structure:modify",
         target_file=input_path,
-        file_version_hash=file_hash,
+        file_version_hash=session.file_hash,
         actor_nonce="auto",
         operation_details={
             "table_name": args.name,
@@ -256,7 +262,8 @@ def _run() -> dict[str, object]:
             "column_count": max_col - min_col + 1,
             "columns": _get_table_columns(ws, min_col, max_col, min_row),
         },
-        warnings=[],
+        workbook_version=version_hash,
+        warnings=warnings if warnings else None,
     )
 
 

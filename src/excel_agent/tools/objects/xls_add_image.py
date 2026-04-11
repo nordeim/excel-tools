@@ -8,15 +8,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from openpyxl import load_workbook
 from openpyxl.drawing.image import Image as XLImage
 from PIL import Image as PILImage
 
-from excel_agent.core.version_hash import compute_file_hash
+from excel_agent.core.edit_session import EditSession
 from excel_agent.governance.audit_trail import AuditTrail
 from excel_agent.tools._tool_base import run_tool
 from excel_agent.utils.cli_helpers import (
     add_common_args,
+    check_macro_contract,
     create_parser,
     validate_input_path,
     validate_output_path,
@@ -101,9 +101,14 @@ def _run() -> dict[str, object]:
 
     input_path = validate_input_path(args.input)
     image_path = Path(args.image_path).resolve()
-    output_path = validate_output_path(args.output or str(input_path), create_parents=True)
+    output_path = validate_output_path(
+        args.output or str(input_path),
+        create_parents=True,
+    )
 
-    file_hash = compute_file_hash(input_path)
+    # Check for macro loss warning
+    macro_warning = check_macro_contract(input_path, output_path)
+    warnings = [macro_warning] if macro_warning else []
 
     # Validate image path
     if not image_path.exists():
@@ -129,7 +134,6 @@ def _run() -> dict[str, object]:
 
     # Check file size
     file_size = image_path.stat().st_size
-    warnings = []
     if file_size > WARNING_SIZE_5MB:
         warnings.append(
             f"Image is very large ({file_size / 1024 / 1024:.1f}MB). "
@@ -139,23 +143,6 @@ def _run() -> dict[str, object]:
         warnings.append(
             f"Image is large ({file_size / 1024 / 1024:.1f}MB). "
             "Consider compressing before insertion."
-        )
-
-    # Load workbook
-    wb = load_workbook(str(input_path))
-    ws = wb[args.sheet] if args.sheet else wb.active
-
-    # Validate position
-    try:
-        from openpyxl.utils import coordinate_to_tuple
-
-        coordinate_to_tuple(args.position)
-    except Exception:
-        return build_response(
-            "error",
-            None,
-            exit_code=1,
-            warnings=[f"Invalid position: {args.position}"],
         )
 
     # Get image info and calculate dimensions
@@ -175,30 +162,52 @@ def _run() -> dict[str, object]:
             warnings=[f"Failed to process image: {e}"],
         )
 
-    # Create and add image
-    try:
-        img = XLImage(str(image_path))
-        img.width = new_width
-        img.height = new_height
-        ws.add_image(img, args.position)
-    except Exception as e:
-        return build_response(
-            "error",
-            None,
-            exit_code=5,
-            warnings=[f"Failed to insert image: {e}"],
-        )
+    # Use EditSession for proper locking and save semantics
+    session = EditSession.prepare(input_path, output_path)
 
-    # Save workbook
-    wb.save(str(output_path))
+    with session:
+        wb = session.workbook
+        ws = wb[args.sheet] if args.sheet else wb.active
 
-    # Log to audit trail
+        # Validate position
+        try:
+            from openpyxl.utils import coordinate_to_tuple
+
+            coordinate_to_tuple(args.position)
+        except Exception:
+            return build_response(
+                "error",
+                None,
+                exit_code=1,
+                warnings=[f"Invalid position: {args.position}"],
+            )
+
+        # Create and add image
+        try:
+            img = XLImage(str(image_path))
+            img.width = new_width
+            img.height = new_height
+            ws.add_image(img, args.position)
+        except Exception as e:
+            return build_response(
+                "error",
+                None,
+                exit_code=5,
+                warnings=[f"Failed to insert image: {e}"],
+            )
+
+        # Capture version hash before exiting context
+        version_hash = session.version_hash
+
+        # EditSession handles save automatically on exit
+
+    # Log to audit trail (after successful save)
     audit = AuditTrail()
     audit.log(
         tool="xls_add_image",
         scope="structure:modify",
         target_file=input_path,
-        file_version_hash=file_hash,
+        file_version_hash=session.file_hash,
         actor_nonce="auto",
         operation_details={
             "image_path": str(image_path),
@@ -228,6 +237,7 @@ def _run() -> dict[str, object]:
             "format": img_info["format"],
             "file_size_kb": round(file_size / 1024, 2),
         },
+        workbook_version=version_hash,
         warnings=warnings if warnings else None,
     )
 

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from openpyxl import load_workbook
 from openpyxl.chart import (
     BarChart,
     LineChart,
@@ -19,11 +18,12 @@ from openpyxl.chart import (
 from openpyxl.chart.label import DataLabelList
 from openpyxl.utils import range_boundaries
 
-from excel_agent.core.version_hash import compute_file_hash
+from excel_agent.core.edit_session import EditSession
 from excel_agent.governance.audit_trail import AuditTrail
 from excel_agent.tools._tool_base import run_tool
 from excel_agent.utils.cli_helpers import (
     add_common_args,
+    check_macro_contract,
     create_parser,
     validate_input_path,
     validate_output_path,
@@ -147,121 +147,134 @@ def _run() -> dict[str, object]:
     args = parser.parse_args()
 
     input_path = validate_input_path(args.input)
-    output_path = validate_output_path(args.output or str(input_path), create_parents=True)
+    output_path = validate_output_path(
+        args.output or str(input_path),
+        create_parents=True,
+    )
 
-    file_hash = compute_file_hash(input_path)
+    # Check for macro loss warning
+    macro_warning = check_macro_contract(input_path, output_path)
+    warnings = [macro_warning] if macro_warning else []
 
-    # Load workbook
-    wb = load_workbook(str(input_path))
-    ws = wb[args.sheet] if args.sheet else wb.active
+    # Use EditSession for proper locking and save semantics
+    session = EditSession.prepare(input_path, output_path)
 
-    # Parse data range
-    try:
-        dc1, dr1, dc2, dr2 = range_boundaries(args.data_range)
-        if dc1 is None or dr1 is None:
-            raise ValueError("Invalid data range format")
-        if dc2 is None:
-            dc2 = dc1
-        if dr2 is None:
-            dr2 = dr1
-    except Exception as e:
-        return build_response(
-            "error",
-            None,
-            exit_code=1,
-            warnings=[f"Failed to parse data range '{args.data_range}': {e}"],
-        )
+    with session:
+        wb = session.workbook
+        ws = wb[args.sheet] if args.sheet else wb.active
 
-    # Validate data range contains numeric data
-    if not _has_numeric_data(ws, dc1, dr1 + 1, dc2, dr2):  # Skip header row
-        return build_response(
-            "error",
-            None,
-            exit_code=1,
-            warnings=[
-                f"Data range {args.data_range} does not contain numeric data",
-                "Charts require numeric values for plotting",
-            ],
-        )
-
-    # Parse categories range if provided
-    cats_ref = None
-    if args.categories_range:
+        # Parse data range
         try:
-            cc1, cr1, cc2, cr2 = range_boundaries(args.categories_range)
-            if cc1 is None or cr1 is None:
-                raise ValueError("Invalid categories range format")
-            if cc2 is None:
-                cc2 = cc1
-            if cr2 is None:
-                cr2 = cr1
-
-            # Validate dimensions match data
-            data_series_count = dr2 - dr1
-            cat_count = cr2 - cr1 + 1
-            if cat_count != data_series_count:
-                return build_response(
-                    "error",
-                    None,
-                    exit_code=1,
-                    warnings=[
-                        f"Categories range has {cat_count} items",
-                        f"Data range has {data_series_count} series",
-                        "Counts must match for proper chart display",
-                    ],
-                )
-
-            cats_ref = Reference(ws, min_col=cc1, min_row=cr1, max_col=cc2, max_row=cr2)
+            dc1, dr1, dc2, dr2 = range_boundaries(args.data_range)
+            if dc1 is None or dr1 is None:
+                raise ValueError("Invalid data range format")
+            if dc2 is None:
+                dc2 = dc1
+            if dr2 is None:
+                dr2 = dr1
         except Exception as e:
             return build_response(
                 "error",
                 None,
                 exit_code=1,
-                warnings=[f"Failed to parse categories range '{args.categories_range}': {e}"],
+                warnings=[f"Failed to parse data range '{args.data_range}': {e}"],
             )
 
-    # Create data reference
-    data_ref = Reference(ws, min_col=dc1, min_row=dr1, max_col=dc2, max_row=dr2)
+        # Validate data range contains numeric data
+        if not _has_numeric_data(ws, dc1, dr1 + 1, dc2, dr2):  # Skip header row
+            return build_response(
+                "error",
+                None,
+                exit_code=1,
+                warnings=[
+                    f"Data range {args.data_range} does not contain numeric data",
+                    "Charts require numeric values for plotting",
+                ],
+            )
 
-    # Validate position
-    try:
-        from openpyxl.utils import coordinate_to_tuple
+        # Parse categories range if provided
+        cats_ref = None
+        if args.categories_range:
+            try:
+                cc1, cr1, cc2, cr2 = range_boundaries(args.categories_range)
+                if cc1 is None or cr1 is None:
+                    raise ValueError("Invalid categories range format")
+                if cc2 is None:
+                    cc2 = cc1
+                if cr2 is None:
+                    cr2 = cr1
 
-        coordinate_to_tuple(args.position)
-    except Exception:
-        return build_response(
-            "error",
-            None,
-            exit_code=1,
-            warnings=[f"Invalid position: {args.position}", "Must be a valid cell reference"],
-        )
+                # Validate dimensions match data
+                data_series_count = dr2 - dr1
+                cat_count = cr2 - cr1 + 1
+                if cat_count != data_series_count:
+                    return build_response(
+                        "error",
+                        None,
+                        exit_code=1,
+                        warnings=[
+                            f"Categories range has {cat_count} items",
+                            f"Data range has {data_series_count} series",
+                            "Counts must match for proper chart display",
+                        ],
+                    )
 
-    # Create chart
-    try:
-        chart = _create_chart(args.type, data_ref, cats_ref, args.title, args.style)
-        chart.width = args.width
-        chart.height = args.height
-    except Exception as e:
-        return build_response(
-            "error",
-            None,
-            exit_code=5,
-            warnings=[f"Failed to create chart: {e}"],
-        )
+                cats_ref = Reference(ws, min_col=cc1, min_row=cr1, max_col=cc2, max_row=cr2)
+            except Exception as e:
+                return build_response(
+                    "error",
+                    None,
+                    exit_code=1,
+                    warnings=[f"Failed to parse categories range '{args.categories_range}': {e}"],
+                )
 
-    # Add chart to worksheet
-    ws.add_chart(chart, args.position)
+        # Create data reference
+        data_ref = Reference(ws, min_col=dc1, min_row=dr1, max_col=dc2, max_row=dr2)
 
-    # Save workbook
-    wb.save(str(output_path))
+        # Validate position
+        try:
+            from openpyxl.utils import coordinate_to_tuple
 
-    # Log to audit trail
+            coordinate_to_tuple(args.position)
+        except Exception:
+            return build_response(
+                "error",
+                None,
+                exit_code=1,
+                warnings=[
+                    f"Invalid position: {args.position}",
+                    "Must be a valid cell reference",
+                ],
+            )
+
+        # Create chart
+        try:
+            chart = _create_chart(args.type, data_ref, cats_ref, args.title, args.style)
+            chart.width = args.width
+            chart.height = args.height
+        except Exception as e:
+            return build_response(
+                "error",
+                None,
+                exit_code=5,
+                warnings=[f"Failed to create chart: {e}"],
+            )
+
+        # Add chart to worksheet
+        ws.add_chart(chart, args.position)
+
+        # Capture version hash before exiting context
+        version_hash = session.version_hash
+
+        # EditSession handles save automatically on exit
+
+    # Log to audit trail (after successful save)
     audit = AuditTrail()
     audit.log(
         tool="xls_add_chart",
         scope="structure:modify",
         target_file=input_path,
-        file_version_hash=file_hash,
+        file_version_hash=session.file_hash,
         actor_nonce="auto",
         operation_details={
             "chart_type": args.type,
@@ -291,7 +304,8 @@ def _run() -> dict[str, object]:
             "width_cm": args.width,
             "height_cm": args.height,
         },
-        warnings=[],
+        workbook_version=version_hash,
+        warnings=warnings if warnings else None,
     )
 
 

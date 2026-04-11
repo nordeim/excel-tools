@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from openpyxl.utils import get_column_letter
 
-from excel_agent.core.agent import ExcelAgent
+from excel_agent.core.edit_session import EditSession
 from excel_agent.core.serializers import RangeSerializer
 from excel_agent.tools._tool_base import run_tool
 from excel_agent.utils.cli_helpers import (
@@ -36,10 +36,16 @@ def _run() -> dict[str, object]:
     args = parser.parse_args()
 
     input_path = validate_input_path(args.input)
-    output_path = validate_output_path(args.output or args.input, create_parents=True)
+    output_arg = args.output or args.input
+    output_path = validate_output_path(output_arg, create_parents=True)
 
-    with ExcelAgent(input_path, mode="rw") as agent:
-        wb = agent.workbook
+    # Use EditSession for proper copy-on-write and save semantics
+    # Allow in-place editing when output == input (default behavior)
+    force_inplace = str(output_path) == str(input_path)
+    session = EditSession.prepare(input_path, output_path, force_inplace=force_inplace)
+
+    with session:
+        wb = session.workbook
         serializer = RangeSerializer(workbook=wb)
         coord = serializer.parse(args.range, default_sheet=args.sheet)
 
@@ -69,6 +75,9 @@ def _run() -> dict[str, object]:
                         }
                     )
 
+        # Capture version hash before any early returns
+        version_hash = session.version_hash
+
         warnings: list[str] = []
         if hidden_data and not args.force:
             return build_response(
@@ -84,7 +93,7 @@ def _run() -> dict[str, object]:
                     f"Use --force to proceed."
                 ],
                 guidance="Use --force to merge despite data in non-anchor cells.",
-                workbook_version=agent.version_hash,
+                workbook_version=version_hash,
             )
 
         if hidden_data:
@@ -99,24 +108,29 @@ def _run() -> dict[str, object]:
         )
         ws.merge_cells(range_string)
 
-        if str(output_path) != str(input_path):
-            wb.save(str(output_path))
+        # Capture version hash before exiting context
+        version_hash = session.version_hash
 
-        return build_response(
-            "success",
-            {
-                "merge_range": range_string,
-                "sheet": sheet_name,
-                "anchor_cell": f"{get_column_letter(min_col)}{min_row}",
-                "data_discarded": len(hidden_data),
-            },
-            workbook_version=agent.version_hash,
-            impact={
-                "cells_modified": (max_row - min_row + 1) * (max_col - min_col + 1),
-                "formulas_updated": 0,
-            },
-            warnings=warnings,
-        )
+        # Capture version hash before exiting context
+        version_hash = session.version_hash
+
+        # EditSession handles save automatically on exit
+
+    return build_response(
+        "success",
+        {
+            "merge_range": range_string,
+            "sheet": sheet_name,
+            "anchor_cell": f"{get_column_letter(min_col)}{min_row}",
+            "data_discarded": len(hidden_data),
+        },
+        workbook_version=version_hash,
+        impact={
+            "cells_modified": (max_row - min_row + 1) * (max_col - min_col + 1),
+            "formulas_updated": 0,
+        },
+        warnings=warnings,
+    )
 
 
 def main() -> None:

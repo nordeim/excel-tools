@@ -6,15 +6,17 @@ fonts, fills, borders, and alignment settings.
 
 from __future__ import annotations
 
-from openpyxl import load_workbook
+import json
+
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import range_boundaries
 
-from excel_agent.core.version_hash import compute_file_hash
+from excel_agent.core.edit_session import EditSession
 from excel_agent.governance.audit_trail import AuditTrail
 from excel_agent.tools._tool_base import run_tool
 from excel_agent.utils.cli_helpers import (
     add_common_args,
+    check_macro_contract,
     create_parser,
     validate_input_path,
     validate_output_path,
@@ -29,7 +31,6 @@ def _parse_json_style(style_str: str | None) -> dict:
     """Parse JSON style string to dict."""
     if not style_str:
         return {}
-    import json
 
     try:
         return json.loads(style_str)
@@ -128,9 +129,14 @@ def _run() -> dict[str, object]:
     args = parser.parse_args()
 
     input_path = validate_input_path(args.input)
-    output_path = validate_output_path(args.output or str(input_path), create_parents=True)
+    output_path = validate_output_path(
+        args.output or str(input_path),
+        create_parents=True,
+    )
 
-    file_hash = compute_file_hash(input_path)
+    # Check for macro loss warning
+    macro_warning = check_macro_contract(input_path, output_path)
+    warnings = [macro_warning] if macro_warning else []
 
     # Parse style specifications
     try:
@@ -150,65 +156,72 @@ def _run() -> dict[str, object]:
             warnings=["At least one style (font, fill, border, alignment) must be provided"],
         )
 
-    # Load workbook
-    wb = load_workbook(str(input_path))
-    ws = wb[args.sheet] if args.sheet else wb.active
-    if ws is None:
-        return build_response("error", None, exit_code=1, warnings=["No active sheet found"])
+    # Use EditSession for proper locking and save semantics
+    session = EditSession.prepare(input_path, output_path)
 
-    # Parse range
-    try:
-        min_col, min_row, max_col, max_row = range_boundaries(args.range)
-        if min_col is None or min_row is None:
-            raise ValueError("Invalid range format")
-        if max_col is None:
-            max_col = min_col
-        if max_row is None:
-            max_row = min_row
-    except Exception as e:
-        return build_response(
-            "error", None, exit_code=1, warnings=[f"Failed to parse range '{args.range}': {e}"]
-        )
+    with session:
+        wb = session.workbook
+        ws = wb[args.sheet] if args.sheet else wb.active
+        if ws is None:
+            return build_response("error", None, exit_code=1, warnings=["No active sheet found"])
 
-    # Check cell count for performance warning
-    cell_count = (max_col - min_col + 1) * (max_row - min_row + 1)
-    warnings = []
-    if cell_count > MAX_CELLS_WARNING:
-        warnings.append(
-            f"Formatting {cell_count} cells may be slow. Consider processing in batches."
-        )
+        # Parse range
+        try:
+            min_col, min_row, max_col, max_row = range_boundaries(args.range)
+            if min_col is None or min_row is None:
+                raise ValueError("Invalid range format")
+            if max_col is None:
+                max_col = min_col
+            if max_row is None:
+                max_row = min_row
+        except Exception as e:
+            return build_response(
+                "error",
+                None,
+                exit_code=1,
+                warnings=[f"Failed to parse range '{args.range}': {e}"],
+            )
 
-    # Create style objects
-    font = _create_font(font_spec) if font_spec else None
-    fill = _create_fill(fill_spec) if fill_spec else None
-    border = _create_border(border_spec) if border_spec else None
-    alignment = _create_alignment(alignment_spec) if alignment_spec else None
+        # Check cell count for performance warning
+        cell_count = (max_col - min_col + 1) * (max_row - min_row + 1)
+        if cell_count > MAX_CELLS_WARNING:
+            warnings.append(
+                f"Formatting {cell_count} cells may be slow. Consider processing in batches."
+            )
 
-    # Apply styles to range
-    cells_formatted = 0
-    for row in range(min_row, max_row + 1):
-        for col in range(min_col, max_col + 1):
-            cell = ws.cell(row=row, column=col)
-            if font:
-                cell.font = font
-            if fill:
-                cell.fill = fill
-            if border:
-                cell.border = border
-            if alignment:
-                cell.alignment = alignment
-            cells_formatted += 1
+        # Create style objects
+        font = _create_font(font_spec) if font_spec else None
+        fill = _create_fill(fill_spec) if fill_spec else None
+        border = _create_border(border_spec) if border_spec else None
+        alignment = _create_alignment(alignment_spec) if alignment_spec else None
 
-    # Save workbook
-    wb.save(str(output_path))
+        # Apply styles to range
+        cells_formatted = 0
+        for row in range(min_row, max_row + 1):
+            for col in range(min_col, max_col + 1):
+                cell = ws.cell(row=row, column=col)
+                if font:
+                    cell.font = font
+                if fill:
+                    cell.fill = fill
+                if border:
+                    cell.border = border
+                if alignment:
+                    cell.alignment = alignment
+                cells_formatted += 1
 
-    # Log to audit trail
+        # Capture version hash before exiting context
+        version_hash = session.version_hash
+
+        # EditSession handles save automatically on exit
+
+    # Log to audit trail (after successful save)
     audit = AuditTrail()
     audit.log(
         tool="xls_format_range",
         scope="structure:modify",
         target_file=input_path,
-        file_version_hash=file_hash,
+        file_version_hash=session.file_hash,
         actor_nonce="auto",
         operation_details={
             "range": args.range,
@@ -234,6 +247,7 @@ def _run() -> dict[str, object]:
             "border_applied": bool(border),
             "alignment_applied": bool(alignment),
         },
+        workbook_version=version_hash,
         warnings=warnings if warnings else None,
     )
 

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from openpyxl.utils import column_index_from_string, get_column_letter
 
-from excel_agent.core.agent import ExcelAgent
 from excel_agent.core.dependency import DependencyTracker
+from excel_agent.core.edit_session import EditSession
 from excel_agent.core.formula_updater import adjust_col_references
 from excel_agent.core.version_hash import compute_file_hash
 from excel_agent.governance.audit_trail import AuditTrail
@@ -52,8 +52,11 @@ def _run() -> dict:
 
     start_col = _parse_column(args.start_column)
 
-    with ExcelAgent(input_path, mode="rw") as agent:
-        wb = agent.workbook
+    # Use EditSession for proper copy-on-write and save semantics
+    session = EditSession.prepare(input_path, output_path)
+
+    with session:
+        wb = session.workbook
         sheet_name = args.sheet or wb.sheetnames[0]
         ws = wb[sheet_name]
         end_col = start_col + args.count - 1
@@ -76,31 +79,33 @@ def _run() -> dict:
         ws.delete_cols(idx=start_col, amount=args.count)
         formulas_updated = adjust_col_references(wb, sheet_name, start_col, -args.count)
 
-        if str(output_path) != str(input_path):
-            wb.save(str(output_path))
+        # Capture version hash before exiting context
+        version_hash = session.version_hash
 
-        audit = AuditTrail()
-        audit.log_operation(
-            tool="xls_delete_columns",
-            scope="range:delete",
-            resource=f"{sheet_name}!cols {start_letter}-{end_letter}",
-            action="delete",
-            outcome="success",
-            token_used=True,
-            file_hash=file_hash,
-        )
+        # EditSession handles save automatically on exit
 
-        return build_response(
-            "success",
-            {
-                "sheet": sheet_name,
-                "start_column": args.start_column,
-                "columns_deleted": args.count,
-                "impact": report.to_dict(),
-            },
-            workbook_version=agent.version_hash,
-            impact={"cells_modified": 0, "formulas_updated": formulas_updated},
-        )
+    audit = AuditTrail()
+    audit.log_operation(
+        tool="xls_delete_columns",
+        scope="range:delete",
+        resource=f"{sheet_name}!cols {start_letter}-{end_letter}",
+        action="delete",
+        outcome="success",
+        token_used=True,
+        file_hash=session.file_hash,
+    )
+
+    return build_response(
+        "success",
+        {
+            "sheet": sheet_name,
+            "start_column": args.start_column,
+            "columns_deleted": args.count,
+            "impact": report.to_dict(),
+        },
+        workbook_version=version_hash,
+        impact={"cells_modified": 0, "formulas_updated": formulas_updated},
+    )
 
 
 def main() -> None:

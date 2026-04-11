@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from excel_agent.core.agent import ExcelAgent
+from excel_agent.core.edit_session import EditSession
 from excel_agent.core.serializers import RangeSerializer
 from excel_agent.core.type_coercion import infer_cell_value
 from excel_agent.governance.schemas import validate_against_schema
@@ -36,8 +36,11 @@ def _run() -> dict:
     validate_against_schema("write_data.schema.json", {"data": data_parsed})
     data: list[list] = data_parsed
 
-    with ExcelAgent(input_path, mode="rw") as agent:
-        wb = agent.workbook
+    # Use EditSession for proper copy-on-write and save semantics
+    session = EditSession.prepare(input_path, output_path)
+
+    with session:
+        wb = session.workbook
         serializer = RangeSerializer(workbook=wb)
         coord = serializer.parse(args.range, default_sheet=args.sheet)
 
@@ -63,9 +66,10 @@ def _run() -> dict:
                 if isinstance(coerced, str) and coerced.startswith("="):
                     formulas_written += 1
 
-        # If output differs from input, save to new path
-        if str(output_path) != str(input_path):
-            wb.save(str(output_path))
+        # Capture version hash before exiting context
+        version_hash = session.version_hash
+
+        # EditSession handles save automatically on exit
 
     return build_response(
         "success",
@@ -75,7 +79,7 @@ def _run() -> dict:
             "rows_written": len(data),
             "cols_written": max((len(row) for row in data), default=0),
         },
-        workbook_version=agent.version_hash,
+        workbook_version=version_hash,
         impact={"cells_modified": cells_written, "formulas_updated": formulas_written},
     )
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from excel_agent.core.agent import ExcelAgent
+from excel_agent.core.edit_session import EditSession
 from excel_agent.tools._tool_base import run_tool
 from excel_agent.utils.cli_helpers import (
     add_common_args,
@@ -28,8 +28,9 @@ def _run() -> dict:
     input_path = validate_input_path(args.input)
     output_path = validate_output_path(args.output or args.input, create_parents=True)
 
-    with ExcelAgent(input_path, mode="rw") as agent:
-        wb = agent.workbook
+    session = EditSession.prepare(input_path, output_path)
+    with session:
+        wb = session.workbook
 
         if args.name not in wb.sheetnames:
             raise ValidationError(f"Sheet {args.name!r} not found")
@@ -38,8 +39,10 @@ def _run() -> dict:
         offset = args.position - current_idx
         wb.move_sheet(args.name, offset=offset)
 
-        if str(output_path) != str(input_path):
-            wb.save(str(output_path))
+        # Capture version hash before exiting context
+        version_hash = session.version_hash
+
+        # EditSession handles save automatically on exit
 
     return build_response(
         "success",
@@ -49,7 +52,7 @@ def _run() -> dict:
             "new_position": args.position,
             "sheets": list(wb.sheetnames),
         },
-        workbook_version=agent.version_hash,
+        workbook_version=version_hash,
     )
 
 

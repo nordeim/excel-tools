@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from openpyxl.utils import get_column_letter
 
-from excel_agent.core.agent import ExcelAgent
+from excel_agent.core.edit_session import EditSession
 from excel_agent.core.serializers import RangeSerializer
 from excel_agent.tools._tool_base import run_tool
 from excel_agent.utils.cli_helpers import (
@@ -35,8 +35,9 @@ def _run() -> dict[str, object]:
     input_path = validate_input_path(args.input)
     output_path = validate_output_path(args.output or args.input, create_parents=True)
 
-    with ExcelAgent(input_path, mode="rw") as agent:
-        wb = agent.workbook
+    session = EditSession.prepare(input_path, output_path)
+    with session:
+        wb = session.workbook
         sheet_name = args.sheet or wb.sheetnames[0]
         ws = wb[sheet_name]
 
@@ -62,8 +63,10 @@ def _run() -> dict[str, object]:
                 ws.unmerge_cells(range_str)
                 unmerged_ranges.append(range_str)
 
-        if str(output_path) != str(input_path):
-            wb.save(str(output_path))
+        # Capture version hash before exiting context
+        version_hash = session.version_hash
+
+        # EditSession handles save automatically on exit
 
         return build_response(
             "success",
@@ -72,7 +75,7 @@ def _run() -> dict[str, object]:
                 "unmerged_ranges": unmerged_ranges,
                 "count": len(unmerged_ranges),
             },
-            workbook_version=agent.version_hash,
+            workbook_version=version_hash,
             impact={"cells_modified": len(unmerged_ranges), "formulas_updated": 0},
         )
 
