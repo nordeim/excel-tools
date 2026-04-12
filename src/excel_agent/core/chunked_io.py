@@ -20,7 +20,8 @@ from openpyxl.worksheet.worksheet import Worksheet
 def _serialize_cell_value(value: object) -> Any:  # noqa: ANN401
     """Convert a cell value to a JSON-serializable type.
 
-    - datetime/date → ISO 8601 string
+    - datetime/date/time → ISO 8601 string
+    - timedelta → total seconds as float
     - None → null
     - Everything else → passthrough (str, int, float, bool)
     """
@@ -32,6 +33,8 @@ def _serialize_cell_value(value: object) -> Any:  # noqa: ANN401
         return value.isoformat()
     if isinstance(value, datetime.time):
         return value.isoformat()
+    if isinstance(value, datetime.timedelta):
+        return value.total_seconds()
     return value
 
 

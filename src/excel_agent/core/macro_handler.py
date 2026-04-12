@@ -168,42 +168,43 @@ class OleToolsMacroAnalyzer:
         try:
             vba = self._olevba.VBA_Parser(str(path))
 
-            if vba.detect_vba_macros():
-                # Check signature
-                try:
-                    signed = vba.is_signed()
-                    result.is_signed = signed
-                    if signed:
-                        result.signature_valid = vba.verify_signature()
-                except Exception as e:
-                    logger.debug("Signature check failed: %s", e)
+            try:
+                if vba.detect_vba_macros():
+                    # Check signature
+                    try:
+                        signed = vba.is_signed()
+                        result.is_signed = signed
+                        if signed:
+                            result.signature_valid = vba.verify_signature()
+                    except Exception as e:
+                        logger.debug("Signature check failed: %s", e)
 
-                # Extract modules
-                for module in vba.extract_all_macros():
-                    if isinstance(module, tuple) and len(module) >= 3:
-                        module_name = module[0] if module[0] else "Unknown"
-                        code = module[2] if len(module) > 2 else ""
+                    # Extract modules
+                    for module in vba.extract_all_macros():
+                        if isinstance(module, tuple) and len(module) >= 3:
+                            module_name = module[0] if module[0] else "Unknown"
+                            code = module[2] if len(module) > 2 else ""
 
-                        macro_module = MacroModule(
-                            name=module_name,
-                            code=code,
-                            is_stream=False,
-                        )
+                            macro_module = MacroModule(
+                                name=module_name,
+                                code=code,
+                                is_stream=False,
+                            )
 
-                        # Check for risk indicators
-                        self._analyze_risk(macro_module)
-                        result.modules.append(macro_module)
+                            # Check for risk indicators
+                            self._analyze_risk(macro_module)
+                            result.modules.append(macro_module)
 
-                result.module_count = len(result.modules)
+                    result.module_count = len(result.modules)
 
-                # Calculate risk score
-                result.risk_score = self._calculate_risk_score(result)
-                result.risk_level = self._get_risk_level(result.risk_score)
+                    # Calculate risk score
+                    result.risk_score = self._calculate_risk_score(result)
+                    result.risk_level = self._get_risk_level(result.risk_score)
 
-                # Extract auto-exec functions
-                result.auto_exec_functions = self._find_auto_exec(result)
-
-            vba.close()
+                    # Extract auto-exec functions
+                    result.auto_exec_functions = self._find_auto_exec(result)
+            finally:
+                vba.close()
 
         except Exception as e:
             result.errors.append(f"Analysis error: {e}")

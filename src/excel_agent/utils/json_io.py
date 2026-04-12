@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta, time
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -21,11 +21,12 @@ class ExcelAgentEncoder(json.JSONEncoder):
     """Custom JSON encoder for types commonly found in Excel workbook data.
 
     Handles:
-        datetime/date → ISO 8601 string
-        Path           → string (POSIX path)
-        bytes          → hex string
-        Decimal        → float
-        set/frozenset  → sorted list
+        datetime/date/time → ISO 8601 string
+        timedelta           → total seconds (float)
+        Path                → string (POSIX path)
+        bytes               → hex string
+        Decimal             → float
+        set/frozenset       → sorted list
     """
 
     def default(self, o: object) -> Any:
@@ -33,6 +34,10 @@ class ExcelAgentEncoder(json.JSONEncoder):
             return o.isoformat()
         if isinstance(o, date):
             return o.isoformat()
+        if isinstance(o, time):
+            return o.isoformat()
+        if isinstance(o, timedelta):
+            return o.total_seconds()
         if isinstance(o, Path):
             return str(o)
         if isinstance(o, bytes):

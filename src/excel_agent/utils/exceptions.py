@@ -89,13 +89,15 @@ class ImpactDeniedError(ExcelAgentError):
         self,
         message: str,
         *,
-        impact_report: dict[str, Any],
-        guidance: str,
+        impact_report: dict[str, Any] | None = None,
+        guidance: str | None = None,
+        impact: dict[str, Any] | None = None,  # SDK alias for impact_report
         details: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(message, details=details)
-        self.impact_report = impact_report
-        self.guidance = guidance
+        # Accept both 'impact_report' and 'impact' for compatibility
+        self.impact_report = impact_report or impact or {}
+        self.guidance = guidance or ""
 
 
 class ConcurrentModificationError(ExcelAgentError):

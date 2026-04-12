@@ -374,8 +374,12 @@ class TestExportErrorHandling:
 
     def test_permission_error(self, data_workbook: Path, tmp_path: Path):
         """Test error on permission denied."""
-        # Try to write to a directory that doesn't exist and can't be created
-        # (This test may not work in all environments)
+        import os
+
+        # Root can create any directory, so this test is only meaningful for non-root
+        if os.getuid() == 0:
+            pytest.skip("Root bypasses permission checks — test requires non-root user")
+
         output_path = Path("/nonexistent_dir/output.csv")
         output, exit_code = run_tool(
             "xls_export_csv",

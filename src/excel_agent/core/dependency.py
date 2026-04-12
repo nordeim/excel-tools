@@ -522,22 +522,33 @@ class DependencyTracker:
                 break
 
         # Generate suggestion
+        action_desc = {"delete": "deletion", "insert": "insertion", "modify": "modification"}.get(
+            action, action
+        )
+
         if broken_refs == 0:
             status = "safe"
             suggestion = "Operation is safe — no formulas will be affected."
         elif broken_refs <= 5:
             status = "warning"
             suggestion = (
-                f"This will break {broken_refs} formula references. "
+                f"This {action_desc} will break {broken_refs} formula references. "
                 "Consider using xls_update_references.py first."
             )
         else:
             status = "critical"
             suggestion = (
-                f"CRITICAL: This will break {broken_refs} formula references "
+                f"CRITICAL: This {action_desc} will break {broken_refs} formula references "
                 f"across {len(affected_sheets)} sheets. "
                 f"Use xls_update_references.py --target='{target_range}' "
                 "before proceeding."
+            )
+
+        # Append circular reference warning if applicable
+        if circular_affected:
+            suggestion += (
+                " WARNING: This operation affects cells involved in circular reference chains. "
+                "Review circular dependencies with xls-dependency-report before proceeding."
             )
 
         # Sample errors (first 10)

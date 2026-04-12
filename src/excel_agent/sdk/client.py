@@ -14,6 +14,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from excel_agent.utils.exceptions import ImpactDeniedError
+
 logger = logging.getLogger(__name__)
 
 
@@ -38,13 +40,16 @@ class TokenRequiredError(AgentClientError):
     pass
 
 
-class ImpactDeniedError(AgentClientError):
-    """Operation denied due to impact on formulas."""
-
-    def __init__(self, message: str, guidance: str, impact: dict, **kwargs):
-        super().__init__(message, **kwargs)
-        self.guidance = guidance
-        self.impact = impact
+# Re-export ImpactDeniedError from utils.exceptions for SDK convenience
+# (not redefined here — the canonical class lives in utils.exceptions)
+__all__ = [
+    "AgentClient",
+    "AgentClientError",
+    "ToolExecutionError",
+    "TokenRequiredError",
+    "ImpactDeniedError",
+    "run_tool",
+]
 
 
 class AgentClient:
@@ -215,10 +220,9 @@ class AgentClient:
             impact = response.get("impact", {})
             raise ImpactDeniedError(
                 response.get("denial_reason", "Operation denied"),
-                guidance=guidance,
                 impact=impact,
-                exit_code=exit_code,
-                response=response,
+                guidance=guidance,
+                details={"exit_code": exit_code, "response": response},
             )
 
         if status == "error":

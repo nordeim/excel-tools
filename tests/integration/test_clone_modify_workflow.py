@@ -192,19 +192,9 @@ class TestCloneModifyWorkflow:
 
         # Step 8: Export PDF (skip gracefully if LibreOffice unavailable)
         pdf_path = workflow_env / "report.pdf"
-        lo_available = (
-            subprocess.run(
-                ["soffice", "--headless", "--version"], capture_output=True, text=True, timeout=5
-            ).returncode
-            == 0
-            or subprocess.run(
-                ["libreoffice", "--headless", "--version"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            ).returncode
-            == 0
-        )
+        import shutil
+
+        lo_available = shutil.which("soffice") is not None or shutil.which("libreoffice") is not None
 
         if lo_available:
             pdf_data, pdf_code = _run_tool(

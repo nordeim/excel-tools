@@ -131,7 +131,11 @@ class ApprovalTokenManager:
         if secret is None:
             secret = os.environ.get("EXCEL_AGENT_SECRET")
         if secret is None:
-            secret = secrets.token_hex(32)
+            raise ValueError(
+                "EXCEL_AGENT_SECRET environment variable is required for token operations. "
+                "Set it before using ApprovalTokenManager: "
+                "export EXCEL_AGENT_SECRET='your-secret-key'"
+            )
         self._secret = secret.encode("utf-8")
 
         # Phase 14: Support pluggable nonce stores

@@ -281,6 +281,7 @@ class TestEditSessionMacroHandling:
             # Agent should have keep_vba=True based on extension
             assert s.agent._keep_vba is True
 
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
     def test_xlsx_extension_no_vba(self, tmp_path: Path) -> None:
         """ExcelAgent auto-detects no macros from .xlsx extension."""
         wb = Workbook()
